@@ -1,19 +1,44 @@
-import { StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, Text, View, ActivityIndicator } from 'react-native';
+import * as Location from 'expo-location';
+import Map from '../components/Map';
 
 export default function Harta() {
+  const [location, setLocation] = useState(null);
+  const [errorMsg, setErrorMsg] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setErrorMsg('Permission to access location was denied');
+        setLoading(false);
+        return;
+      }
+
+      let location = await Location.getCurrentPositionAsync({});
+      setLocation(location);
+      setLoading(false);
+    })();
+  }, []);
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Ionicons name="map" size={48} color="#007AFF" />
         <Text style={styles.title}>Hartă</Text>
-        <Text style={styles.subtitle}>Vizualizează locațiile pe hartă</Text>
       </View>
       
       <View style={styles.content}>
-        <Text style={styles.description}>
-          Aici va fi afișată harta interactivă cu toate locațiile disponibile.
-        </Text>
+        {loading ? (
+          <ActivityIndicator size="large" color="#007AFF" />
+        ) : errorMsg ? (
+          <Text style={styles.errorText}>{errorMsg}</Text>
+        ) : location ? (
+          <Map location={location} />
+        ) : (
+           <Text>Se încarcă harta...</Text>
+        )}
       </View>
     </View>
   );
@@ -22,37 +47,30 @@ export default function Harta() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F2F2F7',
+    backgroundColor: '#fff',
   },
   header: {
-    backgroundColor: '#fff',
-    padding: 30,
+    paddingTop: 50,
+    paddingBottom: 15,
     alignItems: 'center',
+    backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5EA',
+    zIndex: 1,
   },
   title: {
-    fontSize: 28,
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#000',
-    marginTop: 16,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#8E8E93',
-    marginTop: 8,
-    textAlign: 'center',
   },
   content: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
   },
-  description: {
+  errorText: {
+    color: 'red',
     fontSize: 16,
-    color: '#333',
-    lineHeight: 24,
+    padding: 20,
     textAlign: 'center',
   },
 });

@@ -1,20 +1,187 @@
-import { StyleSheet, Text, View, ScrollView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, Text, View, ScrollView, Image, TextInput, TouchableOpacity, FlatList, Dimensions, Platform, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
+const CATEGORIES = ['Fluxul meu', 'Festival', 'Concerte', 'Teatru', 'Sport'];
+const API_URL = Platform.OS === 'android' ? 'http://10.0.2.2:5000/api/events' : 'http://localhost:5000/api/events';
+
+const SUGGESTIONS = [ 
+  {
+    id: 'sug1',
+    title: 'Tur ghidat Cetate',
+    date: 'Sâmbătă',
+    time: '10:00',
+    image: 'https://images.unsplash.com/photo-1541963463532-d68292c34b19?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60',
+  },
+  { 
+    id: 'sug2',
+    title: 'Expoziție Brâncuși',
+    date: 'Duminică',
+    time: '11:00',
+    image: 'https://images.unsplash.com/photo-1518998053901-5348d3969105?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60',
+  }
+]; 
+
 export default function Exploreaza() {
+  const [activeCategory, setActiveCategory] = useState('Fluxul meu');
+  const [eventsData, setEventsData] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    fetchEvents();
+  }, []);
+
+  const fetchEvents = async () => {
+    try {
+      const response = await fetch(API_URL);
+      const data = await response.json();
+      
+      // Group events by category
+      const groupedEvents = {};
+      CATEGORIES.forEach(cat => groupedEvents[cat] = []);
+      
+      data.forEach(event => {
+        if (groupedEvents[event.category]) {
+          groupedEvents[event.category].push(event);
+        }
+      });
+      
+      setEventsData(groupedEvents);
+      setLoading(false);
+    } catch (err) {
+      console.error('Error fetching events:', err);
+      setError('Nu s-au putut încărca evenimentele');
+      setLoading(false);
+    }
+  };
+
+  const renderCategory = ({ item }) => (
+    <TouchableOpacity 
+      style={[styles.categoryChip, item === activeCategory && styles.activeCategoryChip]}
+      onPress={() => setActiveCategory(item)}
+    >
+      <Text style={[styles.categoryText, item === activeCategory && styles.activeCategoryText]}>
+        {item}
+      </Text>
+    </TouchableOpacity>
+  );
+
+  const renderEventCard = ({ item }) => (
+    <View style={styles.card}>
+      <Image source={{ uri: item.image }} style={styles.cardImage} />
+      <View style={styles.dateBadge}>
+        <Text style={styles.dateDay}>{item.date}</Text>
+        <Text style={styles.dateMonth}>{item.month}</Text>
+      </View>
+      <View style={styles.cardContent}>
+        <Text style={styles.cardTitle}>{item.title}</Text>
+        <View style={styles.cardRow}>
+          <Ionicons name="location-outline" size={14} color="#888" />
+          <Text style={styles.cardLocation}>{item.location}</Text>
+        </View>
+        <View style={styles.cardFooter}>
+          <View style={styles.cardRow}>
+            <Ionicons name="time-outline" size={14} color="#888" />
+            <Text style={styles.cardTime}>{item.time}</Text>
+          </View>
+          <View style={styles.priceTag}>
+             <Text style={styles.priceLabel}>Bilet</Text>
+             <Text style={styles.priceValue}>{item.price}</Text>
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <ActivityIndicator size="large" color="#FF3366" />
+      </View>
+    );
+  }
+
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      {/* Header */}
       <View style={styles.header}>
-        <Ionicons name="compass" size={48} color="#007AFF" />
-        <Text style={styles.title}>Explorează</Text>
-        <Text style={styles.subtitle}>Descoperă locuri noi și interesante</Text>
+        <TouchableOpacity>
+          <Ionicons name="menu-outline" size={28} color="#333" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Unde mergem?</Text>
+        <TouchableOpacity>
+          <Ionicons name="person-circle-outline" size={40} color="#333" />
+        </TouchableOpacity>
+      </View>
+
+      {/* Welcome Section */}
+      <View style={styles.welcomeSection}>
+        <Text style={styles.welcomeText}>Hai să ne distrăm</Text>
+        <Text style={styles.locationText}>Timișoara, RO</Text>
+      </View>
+
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <Ionicons name="search-outline" size={20} color="#999" style={styles.searchIcon} />
+        <TextInput 
+          placeholder="Caută eveniment" 
+          style={styles.searchInput}
+          placeholderTextColor="#999"
+        />
+      </View>
+
+      {/* Categories */}
+      <View style={styles.categoriesContainer}>
+        <FlatList
+          data={CATEGORIES}
+          renderItem={renderCategory}
+          keyExtractor={item => item}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoriesList}
+        />
+      </View>
+
+      {/* Featured Events */}
+      <FlatList
+        data={eventsData[activeCategory] || []}
+        renderItem={renderEventCard}
+        keyExtractor={item => item._id || item.id}
+        horizontal
+        showsHorizontalScrollIndicator={Platform.OS === 'web'}
+        contentContainerStyle={styles.eventsList}
+        snapToInterval={Platform.OS === 'web' ? null : Dimensions.get('window').width * 0.7 + 20}
+        decelerationRate="fast"
+        snapToAlignment="start"
+        pagingEnabled={false}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>Nu există evenimente în această categorie</Text>
+          </View>
+        }
+      />
+
+      {/* Suggestions */}
+      <View style={styles.suggestionsSection}>
+        <Text style={styles.sectionTitle}>Sugestii pentru tine</Text>
+        {SUGGESTIONS.map(item => (
+          <View key={item.id} style={styles.suggestionCard}>
+            <Image source={{ uri: item.image }} style={styles.suggestionImage} />
+            <View style={styles.suggestionInfo}>
+              <Text style={styles.suggestionTitle}>{item.title}</Text>
+              <View style={styles.cardRow}>
+                <Ionicons name="calendar-outline" size={14} color="#888" />
+                <Text style={styles.suggestionDate}>{item.date}</Text>
+                <Ionicons name="time-outline" size={14} color="#888" style={{marginLeft: 10}} />
+                <Text style={styles.suggestionDate}>{item.time}</Text>
+              </View>
+            </View>
+          </View>
+        ))}
       </View>
       
-      <View style={styles.content}>
-        <Text style={styles.description}>
-          Aici vei putea explora diferite locuri, evenimente și activități din zona ta.
-        </Text>
-      </View>
+      <View style={{height: 80}} /> 
     </ScrollView>
   );
 }
@@ -22,34 +189,218 @@ export default function Exploreaza() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F2F2F7',
+    backgroundColor: '#fff',
+    paddingTop: 50, // Adjust for status bar
   },
   header: {
-    backgroundColor: '#fff',
-    padding: 30,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
+    paddingHorizontal: 20,
+    marginBottom: 20,
   },
-  title: {
-    fontSize: 28,
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  welcomeSection: {
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  welcomeText: {
+    fontSize: 14,
+    color: '#888',
+    marginBottom: 4,
+  },
+  locationText: {
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#000',
-    marginTop: 16,
+    color: '#333',
   },
-  subtitle: {
-    fontSize: 16,
-    color: '#8E8E93',
-    marginTop: 8,
-    textAlign: 'center',
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+    marginHorizontal: 20,
+    borderRadius: 12,
+    paddingHorizontal: 15,
+    height: 50,
+    marginBottom: 25,
   },
-  content: {
-    padding: 20,
+  searchIcon: {
+    marginRight: 10,
   },
-  description: {
+  searchInput: {
+    flex: 1,
     fontSize: 16,
     color: '#333',
-    lineHeight: 24,
-    textAlign: 'center',
+  },
+  categoriesContainer: {
+    marginBottom: 25,
+  },
+  categoriesList: {
+    paddingHorizontal: 20,
+  },
+  categoryChip: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    marginRight: 10,
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+  },
+  activeCategoryChip: {
+    backgroundColor: '#FF7F50', // Coral orange
+    borderColor: '#FF7F50',
+  },
+  categoryText: {
+    color: '#888',
+    fontWeight: '500',
+  },
+  activeCategoryText: {
+    color: '#fff',
+  },
+  eventsList: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  card: {
+    width: Dimensions.get('window').width * 0.7,
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    marginRight: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 5,
+    overflow: 'hidden',
+  },
+  cardImage: {
+    width: '100%',
+    height: 250,
+    resizeMode: 'cover',
+  },
+  dateBadge: {
+    position: 'absolute',
+    top: 15,
+    left: 15,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 12,
+    padding: 8,
+    alignItems: 'center',
+    minWidth: 50,
+  },
+  dateDay: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  dateMonth: {
+    fontSize: 12,
+    color: '#666',
+  },
+  cardContent: {
+    padding: 15,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  cardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  cardLocation: {
+    fontSize: 14,
+    color: '#888',
+    marginLeft: 4,
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 15,
+  },
+  cardTime: {
+    fontSize: 14,
+    color: '#888',
+    marginLeft: 4,
+  },
+  priceTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  priceLabel: {
+    fontSize: 12,
+    color: '#888',
+    marginRight: 4,
+  },
+  priceValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FF7F50',
+  },
+  suggestionsSection: {
+    paddingHorizontal: 20,
+    marginTop: 10,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 15,
+  },
+  suggestionCard: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderRadius: 15,
+    padding: 10,
+    marginBottom: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    elevation: 2,
+  },
+  suggestionImage: {
+    width: 70,
+    height: 70,
+    borderRadius: 10,
+  },
+  suggestionInfo: {
+    flex: 1,
+    marginLeft: 15,
+    justifyContent: 'center',
+  },
+  suggestionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  suggestionDate: {
+    fontSize: 12,
+    color: '#888',
+    marginLeft: 4,
+  },
+  centerContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyContainer: {
+    width: Dimensions.get('window').width - 40,
+    height: 200,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#888',
   },
 });

@@ -10,11 +10,16 @@
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
+    "@react-google-maps/api": "^2.20.7",
     "expo": "~54.0.24",
+    "expo-location": "~19.0.7",
     "expo-status-bar": "~3.0.8",
+    "leaflet": "^1.9.4",
     "react": "19.1.0",
     "react-dom": "19.1.0",
+    "react-leaflet": "^5.0.0",
     "react-native": "0.81.5",
+    "react-native-maps": "1.20.1",
     "react-native-web": "^0.21.0"
   },
   "private": true
