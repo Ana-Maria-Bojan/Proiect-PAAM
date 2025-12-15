@@ -1,7 +1,17 @@
 import React, { useEffect } from 'react';
 import { StyleSheet, View, ActivityIndicator } from 'react-native';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
+import PropTypes from 'prop-types';
+
+// Componenta care actualizează centrul hărții când se schimbă locația
+function MapUpdater({ center }) {
+  const map = useMap();
+  useEffect(() => {
+    map.setView(center, 15);
+  }, [center, map]);
+  return null;
+}
 
 // Fix for default marker icon in Leaflet with React
 const icon = L.icon({
@@ -47,13 +57,14 @@ export default function Map({ location }) {
           zoom={15} 
           style={{ height: '100%', width: '100%' }}
         >
+          <MapUpdater center={position} />
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           <Marker position={position} icon={icon}>
             <Popup>
-              Locația ta.
+              Te afli aici.
             </Popup>
           </Marker>
         </MapContainer>
@@ -61,6 +72,15 @@ export default function Map({ location }) {
     </View>
   );
 }
+
+Map.propTypes = {
+  location: PropTypes.shape({
+    coords: PropTypes.shape({
+      latitude: PropTypes.number.isRequired,
+      longitude: PropTypes.number.isRequired,
+    }).isRequired,
+  }),
+};
 
 const styles = StyleSheet.create({
   container: {

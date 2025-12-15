@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, ScrollView, Image, TextInput, TouchableOpacity, FlatList, Dimensions, Platform, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { API_URL } from '../config';
 
 const CATEGORIES = ['Fluxul meu', 'Festival', 'Concerte', 'Teatru', 'Sport'];
-const API_URL = Platform.OS === 'android' ? 'http://10.0.2.2:5000/api/events' : 'http://localhost:5000/api/events';
+// API_URL este acum importat din config.js si se seteaza automat
+const EVENTS_URL = `${API_URL}/events`;
 
 const SUGGESTIONS = [ 
   {
@@ -34,7 +36,7 @@ export default function Exploreaza() {
 
   const fetchEvents = async () => {
     try {
-      const response = await fetch(API_URL);
+      const response = await fetch(EVENTS_URL);
       const data = await response.json();
       
       // Group events by category
@@ -69,7 +71,10 @@ export default function Exploreaza() {
 
   const renderEventCard = ({ item }) => (
     <View style={styles.card}>
-      <Image source={{ uri: item.image }} style={styles.cardImage} />
+      <Image 
+        source={{ uri: item.image }} 
+        style={styles.cardImage}
+      />
       <View style={styles.dateBadge}>
         <Text style={styles.dateDay}>{item.date}</Text>
         <Text style={styles.dateMonth}>{item.month}</Text>
@@ -286,6 +291,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 250,
     resizeMode: 'cover',
+    backgroundColor: '#eee', // Placeholder color
   },
   dateBadge: {
     position: 'absolute',

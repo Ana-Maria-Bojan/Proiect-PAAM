@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, Dimensions } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import PropTypes from 'prop-types';
 
 export default function Map({ location }) {
   if (!location) return null;
@@ -9,25 +10,28 @@ export default function Map({ location }) {
     <MapView
       style={styles.map}
       provider={PROVIDER_GOOGLE}
-      initialRegion={{
+      region={{
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
-        latitudeDelta: 0.0922,
-        longitudeDelta: 0.0421,
+        latitudeDelta: 0.01, // Zoom mai mare pentru precizie
+        longitudeDelta: 0.01,
       }}
       showsUserLocation={true}
+      showsMyLocationButton={true}
     >
-      <Marker
-        coordinate={{
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-        }}
-        title={"Locația ta"}
-        description={"Te afli aici"}
-      />
+      {/* Am scos marker-ul manual pentru a lăsa punctul albastru nativ (mai precis) */}
     </MapView>
   );
 }
+
+Map.propTypes = {
+  location: PropTypes.shape({
+    coords: PropTypes.shape({
+      latitude: PropTypes.number.isRequired,
+      longitude: PropTypes.number.isRequired,
+    }).isRequired,
+  }),
+};
 
 const styles = StyleSheet.create({
   map: {

@@ -11,7 +11,7 @@ const EVENTS_DATA = {
       month: 'Iul',
       time: '19:00',
       price: 'Gratuit',
-      image: 'https://images.unsplash.com/photo-1511192336575-5a79af67a629?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60',
+      image: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=800&q=80',
     },
     {
       title: 'Teatru în Parc',
@@ -20,7 +20,7 @@ const EVENTS_DATA = {
       month: 'Aug',
       time: '20:30',
       price: '30 RON',
-      image: 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60',
+      image: 'https://loremflickr.com/400/300/theater,park?lock=2',
     },
     {
       title: 'Street Food Festival',
@@ -29,7 +29,7 @@ const EVENTS_DATA = {
       month: 'Aug',
       time: '12:00',
       price: 'Gratuit',
-      image: 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60',
+      image: 'https://loremflickr.com/400/300/streetfood,burger?lock=3',
     },
   ],
   'Festival': [
@@ -40,7 +40,7 @@ const EVENTS_DATA = {
       month: 'Aug',
       time: '16:00',
       price: '250 RON',
-      image: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60',
+      image: 'https://loremflickr.com/400/300/musicfestival,party?lock=4',
     },
     {
       title: 'Codru Festival',
@@ -49,7 +49,7 @@ const EVENTS_DATA = {
       month: 'Aug',
       time: '14:00',
       price: '200 RON',
-      image: 'https://images.unsplash.com/photo-1533174072545-e8d4aa97d848?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60',
+      image: 'https://loremflickr.com/400/300/forest,festival?lock=5',
     },
     {
       title: 'Plai Festival',
@@ -58,7 +58,7 @@ const EVENTS_DATA = {
       month: 'Sep',
       time: '10:00',
       price: '150 RON',
-      image: 'https://images.unsplash.com/photo-1514525253440-b393452e8d26?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60',
+      image: 'https://loremflickr.com/400/300/art,culture?lock=6',
     },
   ],
   'Concerte': [
@@ -69,7 +69,7 @@ const EVENTS_DATA = {
       month: 'Sep',
       time: '19:00',
       price: '50 RON',
-      image: 'https://images.unsplash.com/photo-1465847899078-b413929f7120?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60',
+      image: 'https://loremflickr.com/400/300/orchestra,classical?lock=7',
     },
     {
       title: 'Rock la Casă',
@@ -78,7 +78,7 @@ const EVENTS_DATA = {
       month: 'Sep',
       time: '20:00',
       price: '40 RON',
-      image: 'https://images.unsplash.com/photo-1459749411177-29432dc29afa?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60',
+      image: 'https://loremflickr.com/400/300/rockband,concert?lock=8',
     },
     {
       title: 'Piano Night',
@@ -87,7 +87,7 @@ const EVENTS_DATA = {
       month: 'Sep',
       time: '18:30',
       price: '60 RON',
-      image: 'https://images.unsplash.com/photo-1552422535-c45813c61732?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60',
+      image: 'https://loremflickr.com/400/300/piano,music?lock=9',
     },
   ],
   'Teatru': [
@@ -98,7 +98,7 @@ const EVENTS_DATA = {
       month: 'Sep',
       time: '19:00',
       price: '60 RON',
-      image: 'https://images.unsplash.com/photo-1507676184212-d03ab07a11d0?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60',
+      image: 'https://loremflickr.com/400/300/theater,stage?lock=10',
     },
     {
       title: 'Impro Show',
@@ -107,7 +107,7 @@ const EVENTS_DATA = {
       month: 'Sep',
       time: '21:00',
       price: '35 RON',
-      image: 'https://images.unsplash.com/photo-1503095392237-59855b70af76?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60',
+      image: 'https://loremflickr.com/400/300/comedy,microphone?lock=11',
     },
     {
       title: 'Lacul Lebedelor',
@@ -116,7 +116,7 @@ const EVENTS_DATA = {
       month: 'Oct',
       time: '18:30',
       price: '100 RON',
-      image: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60',
+      image: 'https://loremflickr.com/400/300/ballet,dance?lock=12',
     },
   ],
   'Sport': [
@@ -127,7 +127,7 @@ const EVENTS_DATA = {
       month: 'Sep',
       time: '17:00',
       price: '20 RON',
-      image: 'https://images.unsplash.com/photo-1504454136457-1d2395baefbe?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60',
+      image: 'https://loremflickr.com/400/300/soccer,stadium?lock=13',
     },
     {
       title: 'Maraton Timișoara',
@@ -136,7 +136,7 @@ const EVENTS_DATA = {
       month: 'Oct',
       time: '08:00',
       price: '100 RON',
-      image: 'https://images.unsplash.com/photo-1552674605-46d536d2f6d1?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60',
+      image: 'https://loremflickr.com/400/300/marathon,running?lock=14',
     },
     {
       title: 'Cupa de Tenis',
@@ -145,7 +145,7 @@ const EVENTS_DATA = {
       month: 'Oct',
       time: '10:00',
       price: 'Gratuit',
-      image: 'https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60',
+      image: 'https://loremflickr.com/400/300/tennis,court?lock=15',
     },
   ],
 };
