@@ -42,6 +42,8 @@ export default function Harta() {
   };
 
   useEffect(() => {
+    let subscription;
+
     (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
@@ -70,7 +72,7 @@ export default function Harta() {
       }
 
       // 2. Urmărim poziția în timp real
-      await Location.watchPositionAsync(
+      subscription = await Location.watchPositionAsync(
         {
           accuracy: Location.Accuracy.Highest,
           timeInterval: 2000,
@@ -82,6 +84,12 @@ export default function Harta() {
         }
       );
     })();
+
+    return () => {
+      if (subscription) {
+        subscription.remove();
+      }
+    };
   }, []);
 
   return (

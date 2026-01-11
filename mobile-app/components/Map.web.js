@@ -13,6 +13,10 @@ function MapUpdater({ center }) {
   return null;
 }
 
+MapUpdater.propTypes = {
+  center: PropTypes.arrayOf(PropTypes.number).isRequired,
+};
+
 // Fix for default marker icon in Leaflet with React
 const icon = L.icon({
   iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
@@ -26,16 +30,14 @@ const icon = L.icon({
 
 export default function Map({ location }) {
   useEffect(() => {
-    // Inject Leaflet CSS
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-    document.head.appendChild(link);
-
-    return () => {
-      // Cleanup is optional but good practice, though removing it might cause flash if component remounts quickly
-      // document.head.removeChild(link); 
-    };
+    // Inject Leaflet CSS only if not present
+    if (!document.getElementById('leaflet-css')) {
+      const link = document.createElement('link');
+      link.id = 'leaflet-css';
+      link.rel = 'stylesheet';
+      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+      document.head.appendChild(link);
+    }
   }, []);
 
   if (!location) {

@@ -148,6 +148,46 @@ const EVENTS_DATA = {
       image: 'https://loremflickr.com/400/300/tennis,court?lock=15',
     },
   ],
+  'Social': [
+    {
+      title: 'Seară de Remi',
+      location: 'Club Jocuri',
+      date: '10',
+      month: 'Oct',
+      time: '19:00',
+      price: '10 RON',
+      image: 'https://loremflickr.com/400/300/boardgame,friends?lock=16',
+    },
+    {
+       title: 'Quiz Night',
+       location: 'Pub central',
+       date: '12',
+       month: 'Oct',
+       time: '20:00',
+       price: 'Gratuit',
+       image: 'https://loremflickr.com/400/300/pub,quiz?lock=17',
+    },
+    {
+       title: 'Competiție Catan',
+       location: 'BoardGame Store',
+       date: '14',
+       month: 'Oct',
+       time: '18:00',
+       price: '15 RON',
+       image: 'https://loremflickr.com/400/300/catan,boardgame?lock=18',
+    }
+  ],
+  'Altele': [
+      {
+        title: 'Târg de Cariere',
+        location: 'Centrul Regional de Afaceri',
+        date: '25',
+        month: 'Oct',
+        time: '10:00',
+        price: 'Gratuit',
+        image: 'https://loremflickr.com/400/300/jobfair,business?lock=19',
+      }
+  ],
 };
 
 const seedDB = async () => {

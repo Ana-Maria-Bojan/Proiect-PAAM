@@ -3,7 +3,7 @@ import { StyleSheet, Text, View, ScrollView, Image, TextInput, TouchableOpacity,
 import { Ionicons } from '@expo/vector-icons';
 import { API_URL } from '../config';
 
-const CATEGORIES = ['Fluxul meu', 'Festival', 'Concerte', 'Teatru', 'Sport'];
+const CATEGORIES = ['Fluxul meu', 'Festival', 'Concerte', 'Teatru', 'Sport', 'Social', 'Altele'];
 // API_URL este acum importat din config.js si se seteaza automat
 const EVENTS_URL = `${API_URL}/events`;
 
@@ -24,7 +24,7 @@ const SUGGESTIONS = [
   }
 ]; 
 
-export default function Exploreaza() {
+export default function Exploreaza({ userData, onNavigateToAccount }) {
   const [activeCategory, setActiveCategory] = useState('Fluxul meu');
   const [eventsData, setEventsData] = useState({});
   const [loading, setLoading] = useState(true);
@@ -32,7 +32,7 @@ export default function Exploreaza() {
 
   useEffect(() => {
     fetchEvents();
-  }, []);
+  }, [userData]); // Refetch when user logs in/out
 
   const fetchEvents = async () => {
     try {
@@ -43,12 +43,35 @@ export default function Exploreaza() {
       const groupedEvents = {};
       CATEGORIES.forEach(cat => groupedEvents[cat] = []);
       
+      // Dacă avem user logat cu preferințe, populăm 'Fluxul meu'
+      const userPreferences = userData?.preferences || [];
+      
       data.forEach(event => {
+        // Adăugăm în categoria specifică
         if (groupedEvents[event.category]) {
           groupedEvents[event.category].push(event);
         }
+
+        // Logică pentru Fluxul meu
+        if (userPreferences.length > 0) {
+            // Dacă userul are preferințe, punem doar ce se potrivește
+            if (userPreferences.includes(event.category)) {
+                groupedEvents['Fluxul meu'].push(event);
+            }
+        } else {
+            // Dacă nu are preferințe (sau nu e logat), 'Fluxul meu' poate conține tot sau selecție random.
+            // Momentan lăsăm totul sau primele X evenimente. Deocamdată punem tot.
+            groupedEvents['Fluxul meu'].push(event);
+        }
       });
       
+      // Dacă userul are preferințe dar nu s-a găsit nimic, poți pune fallback
+      // Optional: Shuffle 'Fluxul meu'
+      if (groupedEvents['Fluxul meu'].length === 0 && userPreferences.length > 0) {
+          // Fallback: arată tot dacă nu găsește nimic specific
+           data.forEach(event => groupedEvents['Fluxul meu'].push(event));
+      }
+
       setEventsData(groupedEvents);
       setLoading(false);
     } catch (err) {
@@ -115,7 +138,7 @@ export default function Exploreaza() {
           <Ionicons name="menu-outline" size={28} color="#333" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Unde mergem?</Text>
-        <TouchableOpacity>
+        <TouchableOpacity onPress={onNavigateToAccount}>
           <Ionicons name="person-circle-outline" size={40} color="#333" />
         </TouchableOpacity>
       </View>

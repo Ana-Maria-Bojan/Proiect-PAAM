@@ -50,7 +50,7 @@ app.get('/api/events/:category', async (req, res) => {
 // Register
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, preferences } = req.body;
 
     // Check if user exists
     const existingUser = await User.findOne({ email });
@@ -66,7 +66,8 @@ app.post('/api/auth/register', async (req, res) => {
     const user = new User({
       name,
       email,
-      password: hashedPassword
+      password: hashedPassword,
+      preferences: preferences || []
     });
 
     await user.save();
@@ -79,7 +80,8 @@ app.post('/api/auth/register', async (req, res) => {
       user: {
         id: user._id,
         name: user.name,
-        email: user.email
+        email: user.email,
+        preferences: user.preferences
       }
     });
   } catch (err) {
@@ -112,7 +114,8 @@ app.post('/api/auth/login', async (req, res) => {
       user: {
         id: user._id,
         name: user.name,
-        email: user.email
+        email: user.email,
+        preferences: user.preferences
       }
     });
   } catch (err) {

@@ -12,11 +12,13 @@ import Cont from './tabs/Cont';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('exploreaza');
+  // Global user state
+  const [userData, setUserData] = useState(null);
 
   const renderContent = () => {
     switch(activeTab) {
       case 'exploreaza':
-        return <Exploreaza />;
+        return <Exploreaza userData={userData} onNavigateToAccount={() => setActiveTab('cont')} />;
       case 'harta':
         return <Harta />;
       case 'publica':
@@ -24,9 +26,9 @@ export default function App() {
       case 'favorite':
         return <Favorite />;
       case 'cont':
-        return <Cont />;
+        return <Cont userData={userData} setUserData={setUserData} />;
       default:
-        return <Exploreaza />;
+        return <Exploreaza userData={userData} />;
     }
   };
 
