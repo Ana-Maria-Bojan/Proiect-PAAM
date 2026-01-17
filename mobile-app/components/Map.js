@@ -1,21 +1,35 @@
-import React from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { StyleSheet, Dimensions } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { PROVIDER_GOOGLE } from 'react-native-maps';
 import PropTypes from 'prop-types';
 
 export default function Map({ location }) {
   if (!location) return null;
-  
+
+  const mapRef = useRef(null);
+
+  const region = useMemo(
+    () => ({
+      latitude: location.coords.latitude,
+      longitude: location.coords.longitude,
+      latitudeDelta: 0.01,
+      longitudeDelta: 0.01,
+    }),
+    [location.coords.latitude, location.coords.longitude]
+  );
+
+  useEffect(() => {
+    if (mapRef.current) {
+      mapRef.current.animateToRegion(region, 350);
+    }
+  }, [region]);
+
   return (
     <MapView
+      ref={mapRef}
       style={styles.map}
       provider={PROVIDER_GOOGLE}
-      region={{
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-        latitudeDelta: 0.01, // Zoom mai mare pentru precizie
-        longitudeDelta: 0.01,
-      }}
+      initialRegion={region}
       showsUserLocation={true}
       showsMyLocationButton={true}
     >

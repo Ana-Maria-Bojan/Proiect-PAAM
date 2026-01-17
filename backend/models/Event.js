@@ -9,6 +9,14 @@ const EventSchema = new mongoose.Schema({
   price: { type: String, required: true },
   image: { type: String, required: true },
   category: { type: String, required: true }, // 'Fluxul meu', 'Festival', 'Concerte', etc.
-});
+  description: { type: String, default: '' },
+  organizer: { type: String, default: '' },
+  contactEmail: { type: String, default: '' },
+  contactPhone: { type: String, default: '' },
+  maxAttendees: { type: Number, default: 0 },
+  currentAttendees: { type: Number, default: 0 },
+  tags: { type: [String], default: [] },
+  website: { type: String, default: '' },
+}, { timestamps: true });
 
 module.exports = mongoose.model('Event', EventSchema);

@@ -24,7 +24,7 @@ const SUGGESTIONS = [
   }
 ]; 
 
-export default function Exploreaza({ userData, onNavigateToAccount }) {
+export default function Exploreaza({ userData, onNavigateToAccount, onEventPress, favoriteEventIds = [], onToggleFavorite }) {
   const [activeCategory, setActiveCategory] = useState('Fluxul meu');
   const [eventsData, setEventsData] = useState({});
   const [loading, setLoading] = useState(true);
@@ -42,6 +42,27 @@ export default function Exploreaza({ userData, onNavigateToAccount }) {
       // Group events by category
       const groupedEvents = {};
       CATEGORIES.forEach(cat => groupedEvents[cat] = []);
+
+      const seenByCategory = {};
+      CATEGORIES.forEach(cat => (seenByCategory[cat] = new Set()));
+
+      const getEventKey = (event) => {
+        const raw = event?._id ?? event?.id;
+        if (raw == null) return null;
+        return String(raw);
+      };
+
+      const addUnique = (category, event) => {
+        if (!groupedEvents[category]) return;
+        const key = getEventKey(event);
+        if (!key) {
+          groupedEvents[category].push(event);
+          return;
+        }
+        if (seenByCategory[category].has(key)) return;
+        seenByCategory[category].add(key);
+        groupedEvents[category].push(event);
+      };
       
       // Dacă avem user logat cu preferințe, populăm 'Fluxul meu'
       const userPreferences = userData?.preferences || [];
@@ -49,19 +70,19 @@ export default function Exploreaza({ userData, onNavigateToAccount }) {
       data.forEach(event => {
         // Adăugăm în categoria specifică
         if (groupedEvents[event.category]) {
-          groupedEvents[event.category].push(event);
+          addUnique(event.category, event);
         }
 
         // Logică pentru Fluxul meu
         if (userPreferences.length > 0) {
             // Dacă userul are preferințe, punem doar ce se potrivește
             if (userPreferences.includes(event.category)) {
-                groupedEvents['Fluxul meu'].push(event);
+            addUnique('Fluxul meu', event);
             }
         } else {
             // Dacă nu are preferințe (sau nu e logat), 'Fluxul meu' poate conține tot sau selecție random.
             // Momentan lăsăm totul sau primele X evenimente. Deocamdată punem tot.
-            groupedEvents['Fluxul meu'].push(event);
+          addUnique('Fluxul meu', event);
         }
       });
       
@@ -69,7 +90,7 @@ export default function Exploreaza({ userData, onNavigateToAccount }) {
       // Optional: Shuffle 'Fluxul meu'
       if (groupedEvents['Fluxul meu'].length === 0 && userPreferences.length > 0) {
           // Fallback: arată tot dacă nu găsește nimic specific
-           data.forEach(event => groupedEvents['Fluxul meu'].push(event));
+         data.forEach(event => addUnique('Fluxul meu', event));
       }
 
       setEventsData(groupedEvents);
@@ -92,35 +113,61 @@ export default function Exploreaza({ userData, onNavigateToAccount }) {
     </TouchableOpacity>
   );
 
-  const renderEventCard = ({ item }) => (
-    <View style={styles.card}>
-      <Image 
-        source={{ uri: item.image }} 
-        style={styles.cardImage}
-      />
-      <View style={styles.dateBadge}>
-        <Text style={styles.dateDay}>{item.date}</Text>
-        <Text style={styles.dateMonth}>{item.month}</Text>
-      </View>
-      <View style={styles.cardContent}>
-        <Text style={styles.cardTitle}>{item.title}</Text>
-        <View style={styles.cardRow}>
-          <Ionicons name="location-outline" size={14} color="#888" />
-          <Text style={styles.cardLocation}>{item.location}</Text>
+  const renderEventCard = ({ item }) => {
+    const isFavorite = favoriteEventIds.includes(item._id || item.id);
+    
+    return (
+      <View style={styles.card}>
+        <Image 
+          source={{ uri: item.image }} 
+          style={styles.cardImage}
+        />
+        <View style={styles.dateBadge}>
+          <Text style={styles.dateDay}>{item.date}</Text>
+          <Text style={styles.dateMonth}>{item.month}</Text>
         </View>
-        <View style={styles.cardFooter}>
+        
+        {/* Favorite Button */}
+        <TouchableOpacity 
+          style={styles.favoriteIconButton}
+          onPress={() => onToggleFavorite && onToggleFavorite(item._id || item.id)}
+          activeOpacity={0.7}
+        >
+          <Ionicons 
+            name={isFavorite ? "heart" : "heart-outline"} 
+            size={24} 
+            color={isFavorite ? "#FF3366" : "#fff"} 
+          />
+        </TouchableOpacity>
+
+        <View style={styles.cardContent}>
+          <Text style={styles.cardTitle}>{item.title}</Text>
           <View style={styles.cardRow}>
-            <Ionicons name="time-outline" size={14} color="#888" />
-            <Text style={styles.cardTime}>{item.time}</Text>
+            <Ionicons name="location-outline" size={14} color="#888" />
+            <Text style={styles.cardLocation}>{item.location}</Text>
           </View>
-          <View style={styles.priceTag}>
-             <Text style={styles.priceLabel}>Bilet</Text>
-             <Text style={styles.priceValue}>{item.price}</Text>
+          <View style={styles.cardFooter}>
+            <View style={styles.cardRow}>
+              <Ionicons name="time-outline" size={14} color="#888" />
+              <Text style={styles.cardTime}>{item.time}</Text>
+            </View>
+            <View style={styles.priceTag}>
+               <Text style={styles.priceLabel}>Bilet</Text>
+               <Text style={styles.priceValue}>{item.price}</Text>
+            </View>
           </View>
+          <TouchableOpacity 
+            style={styles.detailsButton}
+            onPress={() => onEventPress && onEventPress(item._id || item.id)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.detailsButtonText}>Vezi detalii</Text>
+            <Ionicons name="arrow-forward" size={16} color="#FF3366" />
+          </TouchableOpacity>
         </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   if (loading) {
     return (
@@ -175,7 +222,7 @@ export default function Exploreaza({ userData, onNavigateToAccount }) {
       <FlatList
         data={eventsData[activeCategory] || []}
         renderItem={renderEventCard}
-        keyExtractor={item => item._id || item.id}
+        keyExtractor={(item, index) => String(item?._id ?? item?.id ?? index)}
         horizontal
         showsHorizontalScrollIndicator={Platform.OS === 'web'}
         contentContainerStyle={styles.eventsList}
@@ -326,6 +373,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     minWidth: 50,
   },
+  favoriteIconButton: {
+    position: 'absolute',
+    top: 15,
+    right: 15,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
   dateDay: {
     fontSize: 18,
     fontWeight: 'bold',
@@ -376,6 +435,24 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#FF7F50',
+  },
+  detailsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    backgroundColor: '#FFF0F5',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#FF3366',
+  },
+  detailsButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FF3366',
+    marginRight: 6,
   },
   suggestionsSection: {
     paddingHorizontal: 20,

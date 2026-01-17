@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, TextInput, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Dimensions } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Dimensions } from 'react-native';
 import { FontAwesome5, MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import Toast from 'react-native-toast-message';
 import { API_URL } from '../config';
 
 const { width } = Dimensions.get('window');
@@ -22,13 +23,14 @@ const INTEREST_TAGS = [
   { id: 'tag12', label: 'Vibe', category: 'Festival' }
 ];
 
-export default function Cont({ userData, setUserData }) {
+export default function Cont({ userData, setUserData, onLogout }) {
   const [isLoggedIn, setIsLoggedIn] = useState(!!userData);
   
   const [isLoginView, setIsLoginView] = useState(true);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selectedTags, setSelectedTags] = useState([]); // Ținem minte tag-urile selectate, nu categoriile direct
 
@@ -47,7 +49,14 @@ export default function Cont({ userData, setUserData }) {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Eroare', 'Te rog completează toate câmpurile');
+      Toast.show({
+        type: 'error',
+        text1: '⚠️ Câmpuri incomplete',
+        text2: 'Te rog completează toate câmpurile',
+        position: 'top',
+        visibilityTime: 2500,
+        topOffset: 50,
+      });
       return;
     }
 
@@ -66,8 +75,26 @@ export default function Cont({ userData, setUserData }) {
       }
 
       setUserData(data.user);
+      
+      // Afișează toast de succes
+      Toast.show({
+        type: 'success',
+        text1: '🎉 Bine ai revenit!',
+        text2: `Salut, ${data.user.name}! Te-ai conectat cu succes.`,
+        position: 'top',
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 50,
+      });
     } catch (error) {
-      Alert.alert('Eroare', error.message);
+      Toast.show({
+        type: 'error',
+        text1: '❌ Eroare la conectare',
+        text2: error.message,
+        position: 'top',
+        visibilityTime: 3000,
+        topOffset: 50,
+      });
     } finally {
       setLoading(false);
     }
@@ -75,7 +102,14 @@ export default function Cont({ userData, setUserData }) {
 
   const handleRegister = async () => {
     if (!name || !email || !password) {
-      Alert.alert('Eroare', 'Te rog completează toate câmpurile');
+      Toast.show({
+        type: 'error',
+        text1: '⚠️ Câmpuri incomplete',
+        text2: 'Te rog completează toate câmpurile',
+        position: 'top',
+        visibilityTime: 2500,
+        topOffset: 50,
+      });
       return;
     }
 
@@ -99,20 +133,54 @@ export default function Cont({ userData, setUserData }) {
       }
 
       setUserData(data.user);
+      
+      // Afișează toast de succes
+      Toast.show({
+        type: 'success',
+        text1: '✅ Cont creat cu succes!',
+        text2: `Bine ai venit, ${data.user.name}! Contul tău a fost creat.`,
+        position: 'top',
+        visibilityTime: 3500,
+        autoHide: true,
+        topOffset: 50,
+      });
     } catch (error) {
-      Alert.alert('Eroare', error.message);
+      Toast.show({
+        type: 'error',
+        text1: '❌ Eroare la înregistrare',
+        text2: error.message,
+        position: 'top',
+        visibilityTime: 3000,
+        topOffset: 50,
+      });
     } finally {
       setLoading(false);
     }
   };
 
   const handleLogout = () => {
+    const userName = userData?.name || 'utilizator';
+    
+    if (onLogout) {
+      onLogout();
+    }
     setUserData(null);
     setEmail('');
     setPassword('');
     setName('');
     setSelectedTags([]);
     setIsLoginView(true);
+    
+    // Afișează toast de deconectare
+    Toast.show({
+      type: 'info',
+      text1: '👋 La revedere!',
+      text2: `${userName}, te-ai deconectat cu succes.`,
+      position: 'top',
+      visibilityTime: 2500,
+      autoHide: true,
+      topOffset: 50,
+    });
   };
 
   if (isLoggedIn) {
@@ -230,8 +298,18 @@ export default function Cont({ userData, setUserData }) {
                         placeholderTextColor="#999"
                         value={password}
                         onChangeText={setPassword}
-                        secureTextEntry
+                        secureTextEntry={!showPassword}
                     />
+                    <TouchableOpacity 
+                        onPress={() => setShowPassword(!showPassword)}
+                        style={styles.eyeButton}
+                    >
+                        <Ionicons 
+                            name={showPassword ? "eye-off" : "eye"} 
+                            size={22} 
+                            color="#5e1059" 
+                        />
+                    </TouchableOpacity>
                 </View>
 
                 {/* Preference Selection (Register only) */}
@@ -375,6 +453,10 @@ const styles = StyleSheet.create({
     color: '#333',
     borderWidth: 0,
     outlineStyle: 'none',
+  },
+  eyeButton: {
+    padding: 5,
+    marginLeft: 5,
   },
   forgotPassword: {
     alignSelf: 'flex-end',

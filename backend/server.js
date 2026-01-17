@@ -35,11 +35,86 @@ app.get('/api/events', async (req, res) => {
   }
 });
 
+// Get single event by ID
+app.get('/api/event/:id', async (req, res) => {
+  try {
+    const event = await Event.findById(req.params.id);
+    if (!event) {
+      return res.status(404).json({ message: 'Evenimentul nu a fost găsit' });
+    }
+    res.json(event);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // Get events by category
 app.get('/api/events/:category', async (req, res) => {
   try {
     const events = await Event.find({ category: req.params.category });
     res.json(events);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// FAVORITE ROUTES
+
+// Get user's favorite events
+app.get('/api/favorites/:userId', async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId).populate('favoriteEvents');
+    if (!user) {
+      return res.status(404).json({ message: 'Utilizatorul nu a fost găsit' });
+    }
+    res.json(user.favoriteEvents);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Add event to favorites
+app.post('/api/favorites/:userId/:eventId', async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId);
+    if (!user) {
+      return res.status(404).json({ message: 'Utilizatorul nu a fost găsit' });
+    }
+
+    // Check if event exists
+    const event = await Event.findById(req.params.eventId);
+    if (!event) {
+      return res.status(404).json({ message: 'Evenimentul nu a fost găsit' });
+    }
+
+    // Check if already in favorites
+    if (user.favoriteEvents.includes(req.params.eventId)) {
+      return res.status(400).json({ message: 'Evenimentul este deja în favorite' });
+    }
+
+    user.favoriteEvents.push(req.params.eventId);
+    await user.save();
+
+    res.json({ message: 'Eveniment adăugat la favorite', favoriteEvents: user.favoriteEvents });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Remove event from favorites
+app.delete('/api/favorites/:userId/:eventId', async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId);
+    if (!user) {
+      return res.status(404).json({ message: 'Utilizatorul nu a fost găsit' });
+    }
+
+    user.favoriteEvents = user.favoriteEvents.filter(
+      id => id.toString() !== req.params.eventId
+    );
+    await user.save();
+
+    res.json({ message: 'Eveniment șters din favorite', favoriteEvents: user.favoriteEvents });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -279,7 +354,18 @@ app.post('/api/seed', async (req, res) => {
     const events = [];
     for (const [category, categoryEvents] of Object.entries(EVENTS_DATA)) {
       categoryEvents.forEach(event => {
-        events.push({ ...event, category });
+        events.push({ 
+          ...event, 
+          category,
+          description: event.description || `Vino și descoperă o experiență unică la ${event.title}! Acest eveniment promite să fie memorabil cu activități interactive, muzică live și multe surprize. Bucură-te de o atmosferă specială în centrul Timișoarei!`,
+          organizer: event.organizer || 'Events Team Timișoara',
+          contactEmail: event.contactEmail || 'contact@eventstm.ro',
+          contactPhone: event.contactPhone || '+40 256 123 456',
+          maxAttendees: event.maxAttendees || Math.floor(Math.random() * 500) + 100,
+          currentAttendees: event.currentAttendees || Math.floor(Math.random() * 200),
+          tags: event.tags || ['Timișoara', 'Entertainment', category],
+          website: event.website || 'https://www.eventstimisoara.ro',
+        });
       });
     }
 

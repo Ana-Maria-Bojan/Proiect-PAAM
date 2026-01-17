@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, Text, View, ActivityIndicator } from 'react-native';
 import * as Location from 'expo-location';
 import Map from '../components/Map';
@@ -9,19 +9,42 @@ export default function Harta() {
   const [errorMsg, setErrorMsg] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const cancelledRef = useRef(false);
+  const subscriptionRef = useRef(null);
+  const addressTimeoutRef = useRef(null);
+  const lastGeocodeAtRef = useRef(0);
+
   const updateAddress = async (loc) => {
     try {
+      if (cancelledRef.current) return;
+
+      // Throttle reverse geocoding (poate fi costisitor și poate bloca UI)
+      const now = Date.now();
+      if (now - lastGeocodeAtRef.current < 10000) {
+        return;
+      }
+      lastGeocodeAtRef.current = now;
+
       // Dacă durează prea mult, afișăm coordonatele
-      let timeout = setTimeout(() => {
+      if (addressTimeoutRef.current) {
+        clearTimeout(addressTimeoutRef.current);
+      }
+      addressTimeoutRef.current = setTimeout(() => {
+        if (cancelledRef.current) return;
         setAddress(`Lat: ${loc.coords.latitude.toFixed(4)}, Long: ${loc.coords.longitude.toFixed(4)}`);
-      }, 5000);
+      }, 4000);
 
       let ret = await Location.reverseGeocodeAsync({
         latitude: loc.coords.latitude,
         longitude: loc.coords.longitude,
       });
-      
-      clearTimeout(timeout);
+
+      if (addressTimeoutRef.current) {
+        clearTimeout(addressTimeoutRef.current);
+        addressTimeoutRef.current = null;
+      }
+
+      if (cancelledRef.current) return;
 
       if (ret.length > 0) {
         let addr = ret[0];
@@ -37,25 +60,31 @@ export default function Harta() {
       }
     } catch (e) {
       console.log('Eroare la geocodare:', e);
-      setAddress(`Lat: ${loc.coords.latitude.toFixed(4)}, Long: ${loc.coords.longitude.toFixed(4)}`);
+      if (!cancelledRef.current) {
+        setAddress(`Lat: ${loc.coords.latitude.toFixed(4)}, Long: ${loc.coords.longitude.toFixed(4)}`);
+      }
     }
   };
 
   useEffect(() => {
-    let subscription;
+    cancelledRef.current = false;
 
     (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        setErrorMsg('Nu am primit permisiunea pentru locație.');
-        setLoading(false);
+        if (!cancelledRef.current) {
+          setErrorMsg('Nu am primit permisiunea pentru locație.');
+          setLoading(false);
+        }
         return;
       }
 
       let enabled = await Location.hasServicesEnabledAsync();
       if (!enabled) {
-        setErrorMsg('Te rog activează GPS-ul.');
-        setLoading(false);
+        if (!cancelledRef.current) {
+          setErrorMsg('Te rog activează GPS-ul.');
+          setLoading(false);
+        }
         return;
       }
 
@@ -64,30 +93,46 @@ export default function Harta() {
         let initialLocation = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.Highest, 
         });
-        setLocation(initialLocation);
-        updateAddress(initialLocation);
-        setLoading(false);
+        if (!cancelledRef.current) {
+          setLocation(initialLocation);
+          updateAddress(initialLocation);
+          setLoading(false);
+        }
       } catch (err) {
         console.log("Eroare la initial location:", err);
       }
 
       // 2. Urmărim poziția în timp real
-      subscription = await Location.watchPositionAsync(
+      const subscription = await Location.watchPositionAsync(
         {
           accuracy: Location.Accuracy.Highest,
           timeInterval: 2000,
           distanceInterval: 2, 
         },
         (newLocation) => {
+          if (cancelledRef.current) return;
           setLocation(newLocation);
           updateAddress(newLocation);
         }
       );
+
+      // Dacă unmount-ul a avut loc înainte să vină subscription, oprim imediat
+      if (cancelledRef.current) {
+        subscription.remove();
+        return;
+      }
+      subscriptionRef.current = subscription;
     })();
 
     return () => {
-      if (subscription) {
-        subscription.remove();
+      cancelledRef.current = true;
+      if (addressTimeoutRef.current) {
+        clearTimeout(addressTimeoutRef.current);
+        addressTimeoutRef.current = null;
+      }
+      if (subscriptionRef.current) {
+        subscriptionRef.current.remove();
+        subscriptionRef.current = null;
       }
     };
   }, []);

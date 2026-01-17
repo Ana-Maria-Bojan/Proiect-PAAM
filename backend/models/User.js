@@ -21,6 +21,11 @@ const userSchema = new mongoose.Schema({
     type: [String],
     default: []
   },
+  favoriteEvents: {
+    type: [mongoose.Schema.Types.ObjectId],
+    ref: 'Event',
+    default: []
+  },
   createdAt: {
     type: Date,
     default: Date.now

@@ -1,0 +1,521 @@
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, Text, View, ScrollView, Image, TouchableOpacity, ActivityIndicator, Linking, Dimensions, Platform } from 'react-native';
+import { Ionicons, MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import Toast from 'react-native-toast-message';
+import { API_URL } from '../config';
+
+const { width, height } = Dimensions.get('window');
+
+export default function EventDetails({ eventId, onBack, isFavorite, onToggleFavorite }) {
+  const [event, setEvent] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchEventDetails();
+  }, [eventId]);
+
+  const fetchEventDetails = async () => {
+    try {
+      const response = await fetch(`${API_URL}/event/${eventId}`);
+      if (!response.ok) {
+        throw new Error('Nu s-au putut încărca detaliile evenimentului');
+      }
+      const data = await response.json();
+      setEvent(data);
+      setLoading(false);
+    } catch (error) {
+      console.error('Error fetching event details:', error);
+      Toast.show({
+        type: 'error',
+        text1: '❌ Eroare',
+        text2: error.message,
+        position: 'top',
+        visibilityTime: 3000,
+        topOffset: 50,
+      });
+      setLoading(false);
+    }
+  };
+
+  const handleFavoriteToggle = () => {
+    if (onToggleFavorite) {
+      onToggleFavorite();
+    }
+  };
+
+  const handleContactPress = (type, value) => {
+    if (type === 'email') {
+      Linking.openURL(`mailto:${value}`);
+    } else if (type === 'phone') {
+      Linking.openURL(`tel:${value}`);
+    } else if (type === 'website') {
+      Linking.openURL(value);
+    }
+  };
+
+  const handleBuyTicket = () => {
+    Toast.show({
+      type: 'info',
+      text1: '🎫 Cumpără bilet',
+      text2: 'Redirecționare către pagina de cumpărare...',
+      position: 'top',
+      visibilityTime: 2500,
+      topOffset: 50,
+    });
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#FF3366" />
+      </View>
+    );
+  }
+
+  if (!event) {
+    return (
+      <View style={styles.errorContainer}>
+        <Ionicons name="alert-circle-outline" size={60} color="#ccc" />
+        <Text style={styles.errorText}>Evenimentul nu a fost găsit</Text>
+        <TouchableOpacity onPress={onBack} style={styles.backButton}>
+          <Text style={styles.backButtonText}>Înapoi</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  const attendancePercentage = event.maxAttendees > 0 
+    ? (event.currentAttendees / event.maxAttendees) * 100 
+    : 0;
+
+  return (
+    <View style={styles.container}>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Header Image */}
+        <View style={styles.imageContainer}>
+          <Image source={{ uri: event.image }} style={styles.headerImage} />
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.8)']}
+            style={styles.gradient}
+          />
+          
+          {/* Back Button */}
+          <TouchableOpacity onPress={onBack} style={styles.backIconButton}>
+            <Ionicons name="arrow-back" size={24} color="#fff" />
+          </TouchableOpacity>
+
+          {/* Favorite Button */}
+          <TouchableOpacity onPress={handleFavoriteToggle} style={styles.favoriteButton}>
+            <Ionicons 
+              name={isFavorite ? "heart" : "heart-outline"} 
+              size={28} 
+              color={isFavorite ? "#FF3366" : "#fff"} 
+            />
+          </TouchableOpacity>
+
+          {/* Date Badge */}
+          <View style={styles.floatingDateBadge}>
+            <Text style={styles.floatingDateDay}>{event.date}</Text>
+            <Text style={styles.floatingDateMonth}>{event.month}</Text>
+          </View>
+        </View>
+
+        {/* Content */}
+        <View style={styles.contentContainer}>
+          {/* Category Badge */}
+          <View style={styles.categoryBadge}>
+            <Text style={styles.categoryBadgeText}>{event.category}</Text>
+          </View>
+
+          {/* Title */}
+          <Text style={styles.title}>{event.title}</Text>
+
+          {/* Info Cards */}
+          <View style={styles.infoCardsContainer}>
+            <View style={styles.infoCard}>
+              <Ionicons name="location" size={24} color="#FF3366" />
+              <Text style={styles.infoCardTitle}>Locație</Text>
+              <Text style={styles.infoCardText}>{event.location}</Text>
+            </View>
+
+            <View style={styles.infoCard}>
+              <Ionicons name="time" size={24} color="#FF3366" />
+              <Text style={styles.infoCardTitle}>Oră</Text>
+              <Text style={styles.infoCardText}>{event.time}</Text>
+            </View>
+
+            <View style={styles.infoCard}>
+              <MaterialIcons name="attach-money" size={24} color="#FF3366" />
+              <Text style={styles.infoCardTitle}>Preț</Text>
+              <Text style={styles.infoCardText}>{event.price}</Text>
+            </View>
+          </View>
+
+          {/* Description */}
+          {event.description && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Despre eveniment</Text>
+              <Text style={styles.description}>
+                {event.description || 'Vino și descoperă o experiență unică! Evenimentul promite să fie memorabil cu activități interactive, muzică live și multe surprize. Nu rata ocazia de a fi parte din această experiență extraordinară!'}
+              </Text>
+            </View>
+          )}
+
+          {/* Organizer Info */}
+          {event.organizer && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Organizator</Text>
+              <View style={styles.organizerCard}>
+                <View style={styles.organizerIcon}>
+                  <FontAwesome5 name="user-tie" size={20} color="#FF3366" />
+                </View>
+                <View style={styles.organizerInfo}>
+                  <Text style={styles.organizerName}>{event.organizer || 'Events Team Timișoara'}</Text>
+                  {event.contactEmail && (
+                    <TouchableOpacity onPress={() => handleContactPress('email', event.contactEmail)}>
+                      <Text style={styles.contactLink}>
+                        <Ionicons name="mail-outline" size={14} /> {event.contactEmail}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                  {event.contactPhone && (
+                    <TouchableOpacity onPress={() => handleContactPress('phone', event.contactPhone)}>
+                      <Text style={styles.contactLink}>
+                        <Ionicons name="call-outline" size={14} /> {event.contactPhone}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                  {event.website && (
+                    <TouchableOpacity onPress={() => handleContactPress('website', event.website)}>
+                      <Text style={styles.contactLink}>
+                        <Ionicons name="globe-outline" size={14} /> Website
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* Attendance */}
+          {event.maxAttendees > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Participanți</Text>
+              <View style={styles.attendanceCard}>
+                <View style={styles.attendanceInfo}>
+                  <Text style={styles.attendanceText}>
+                    {event.currentAttendees || 0} / {event.maxAttendees} persoane
+                  </Text>
+                  <Text style={styles.attendanceSubtext}>
+                    {event.maxAttendees - (event.currentAttendees || 0)} locuri disponibile
+                  </Text>
+                </View>
+                <View style={styles.progressBarContainer}>
+                  <View style={[styles.progressBar, { width: `${attendancePercentage}%` }]} />
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* Tags */}
+          {event.tags && event.tags.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Tags</Text>
+              <View style={styles.tagsContainer}>
+                {event.tags.map((tag, index) => (
+                  <View key={index} style={styles.tag}>
+                    <Text style={styles.tagText}>#{tag}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
+          <View style={{ height: 100 }} />
+        </View>
+      </ScrollView>
+
+      {/* Bottom Action Button */}
+      <View style={styles.bottomContainer}>
+        <TouchableOpacity onPress={handleBuyTicket} activeOpacity={0.8}>
+          <LinearGradient
+            colors={['#FF3366', '#FF6B9D']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.buyButton}
+          >
+            <Ionicons name="ticket" size={24} color="#fff" />
+            <Text style={styles.buyButtonText}>Cumpără bilet - {event.price}</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    padding: 20,
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#888',
+    marginTop: 20,
+    marginBottom: 20,
+  },
+  imageContainer: {
+    position: 'relative',
+    width: width,
+    height: height * 0.4,
+  },
+  headerImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  gradient: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: '50%',
+  },
+  backIconButton: {
+    position: 'absolute',
+    top: 50,
+    left: 20,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  favoriteButton: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  floatingDateBadge: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  floatingDateDay: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#FF3366',
+  },
+  floatingDateMonth: {
+    fontSize: 12,
+    color: '#888',
+    textTransform: 'uppercase',
+  },
+  contentContainer: {
+    padding: 20,
+  },
+  categoryBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#FFF0F5',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginBottom: 12,
+  },
+  categoryBadgeText: {
+    color: '#FF3366',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 20,
+    lineHeight: 34,
+  },
+  infoCardsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 30,
+  },
+  infoCard: {
+    flex: 1,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 4,
+    alignItems: 'center',
+  },
+  infoCardTitle: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  infoCardText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#333',
+    textAlign: 'center',
+  },
+  section: {
+    marginBottom: 30,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 12,
+  },
+  description: {
+    fontSize: 15,
+    lineHeight: 24,
+    color: '#666',
+  },
+  organizerCard: {
+    flexDirection: 'row',
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    padding: 16,
+  },
+  organizerIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#FFF0F5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  organizerInfo: {
+    flex: 1,
+  },
+  organizerName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 6,
+  },
+  contactLink: {
+    fontSize: 13,
+    color: '#007AFF',
+    marginTop: 4,
+  },
+  attendanceCard: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    padding: 16,
+  },
+  attendanceInfo: {
+    marginBottom: 12,
+  },
+  attendanceText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  attendanceSubtext: {
+    fontSize: 13,
+    color: '#888',
+    marginTop: 4,
+  },
+  progressBarContainer: {
+    height: 8,
+    backgroundColor: '#E5E5EA',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressBar: {
+    height: '100%',
+    backgroundColor: '#FF3366',
+    borderRadius: 4,
+  },
+  tagsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  tag: {
+    backgroundColor: '#F8F9FA',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  tagText: {
+    fontSize: 13,
+    color: '#666',
+  },
+  bottomContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#fff',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E5EA',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  buyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 12,
+  },
+  buyButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 8,
+  },
+  backButton: {
+    backgroundColor: '#FF3366',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  backButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+});
