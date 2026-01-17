@@ -118,7 +118,11 @@ export default function Harta() {
 
       // Dacă unmount-ul a avut loc înainte să vină subscription, oprim imediat
       if (cancelledRef.current) {
-        subscription.remove();
+        try {
+          subscription.remove();
+        } catch (e) {
+          console.log("Eroare la eliminarea subscription (immediate):", e);
+        }
         return;
       }
       subscriptionRef.current = subscription;
@@ -131,7 +135,11 @@ export default function Harta() {
         addressTimeoutRef.current = null;
       }
       if (subscriptionRef.current) {
-        subscriptionRef.current.remove();
+        try {
+          subscriptionRef.current.remove();
+        } catch (e) {
+          console.log("Eroare la eliminarea subscription (cleanup):", e);
+        }
         subscriptionRef.current = null;
       }
     };
