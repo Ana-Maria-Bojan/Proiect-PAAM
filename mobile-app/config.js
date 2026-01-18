@@ -2,6 +2,7 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
 const DEFAULT_API_URL = 'http://localhost:5000/api';
+const ANDROID_EMULATOR_API_URL = 'http://10.0.2.2:5000/api';
 
 const normalizeUrl = (url) => {
   if (!url) return url;
@@ -11,6 +12,37 @@ const normalizeUrl = (url) => {
 const isTunnelHost = (host) => {
   const h = (host || '').toLowerCase();
   return h.endsWith('.exp.direct') || h.endsWith('.expo.dev');
+};
+
+const sanitizeApiOverride = (raw) => {
+  const normalized = normalizeUrl(raw);
+  if (!normalized) return null;
+
+  // Accept values like "10.0.2.2:5000/api" (missing scheme)
+  const withScheme = /^https?:\/\//i.test(normalized) ? normalized : `http://${normalized}`;
+
+  try {
+    const url = new URL(withScheme);
+
+    // Guardrail: Expo/Metro dev server commonly runs on 8081.
+    if (url.port === '8081') return null;
+
+    // Ensure we're pointing at the backend base path.
+    const path = (url.pathname || '/').replace(/\/+$/, '');
+    if (!path || path === '/') {
+      url.pathname = '/api';
+    } else if (!path.includes('/api')) {
+      // If user accidentally sets a non-API path (e.g. /events), force /api.
+      url.pathname = '/api';
+    } else {
+      url.pathname = path;
+    }
+
+    return normalizeUrl(`${url.origin}${url.pathname}`);
+  } catch {
+    // If it's not a valid URL, ignore override to avoid hard-to-debug failures.
+    return null;
+  }
 };
 
 const getExpoHost = () => {
@@ -27,10 +59,22 @@ const getExpoHost = () => {
 
 const getApiUrl = () => {
   // Optional override (useful when running Expo in tunnel mode)
-  const override = normalizeUrl(process.env.EXPO_PUBLIC_API_URL);
+  const override = sanitizeApiOverride(process.env.EXPO_PUBLIC_API_URL);
   if (override) return override;
 
   const host = getExpoHost();
+
+  // Android emulator cannot reach your PC via localhost.
+  if (Platform.OS === 'android') {
+    if (!host || host === 'localhost' || host === '127.0.0.1') {
+      return ANDROID_EMULATOR_API_URL;
+    }
+    if (isTunnelHost(host)) {
+      // In tunnel mode Expo host is not your LAN IP; require EXPO_PUBLIC_API_URL.
+      return ANDROID_EMULATOR_API_URL;
+    }
+    return `http://${host}:5000/api`;
+  }
 
   // On web, localhost is correct.
   if (Platform.OS === 'web') {

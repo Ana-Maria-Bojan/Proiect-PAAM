@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Dimensions } from 'react-native';
-import { FontAwesome5, MaterialIcons, Ionicons } from '@expo/vector-icons';
+import { StyleSheet, Text, View, TouchableOpacity, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Dimensions, Share, Linking, Alert, Switch, Modal } from 'react-native';
+import { FontAwesome5, MaterialIcons, Ionicons, Feather, AntDesign } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Toast from 'react-native-toast-message';
 import { API_URL } from '../config';
@@ -33,6 +33,8 @@ export default function Cont({ userData, setUserData, onLogout }) {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selectedTags, setSelectedTags] = useState([]); // Ținem minte tag-urile selectate, nu categoriile direct
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [showAboutModal, setShowAboutModal] = useState(false);
 
   // Actualizează isLoggedIn când userData se schimbă (ex: din App.js)
   React.useEffect(() => {
@@ -183,6 +185,176 @@ export default function Cont({ userData, setUserData, onLogout }) {
     });
   };
 
+  // Funcții pentru butoanele noi
+  const handleNotifications = () => {
+    Alert.alert(
+      'Notificări',
+      'Dorești să primești notificări pentru evenimente noi?',
+      [
+        {
+          text: 'Anulează',
+          style: 'cancel'
+        },
+        {
+          text: 'Dezactivează',
+          onPress: () => {
+            setNotificationsEnabled(false);
+            Toast.show({
+              type: 'info',
+              text1: '🔕 Notificări dezactivate',
+              text2: 'Nu vei mai primi notificări pentru evenimente',
+              position: 'top',
+              visibilityTime: 2000,
+              topOffset: 50,
+            });
+          }
+        },
+        {
+          text: 'Activează',
+          onPress: () => {
+            setNotificationsEnabled(true);
+            Toast.show({
+              type: 'success',
+              text1: '🔔 Notificări activate',
+              text2: 'Vei fi notificat despre evenimente noi',
+              position: 'top',
+              visibilityTime: 2000,
+              topOffset: 50,
+            });
+          }
+        }
+      ]
+    );
+  };
+
+  const handleHistory = async () => {
+    Toast.show({
+      type: 'info',
+      text1: '📅 Istoric Evenimente',
+      text2: 'Se încarcă evenimentele tale...',
+      position: 'top',
+      visibilityTime: 2000,
+      topOffset: 50,
+    });
+    
+    // Aici poți adăuga logică pentru a afișa istoric
+    // De exemplu, navigare către un nou screen sau modal
+  };
+
+  const handleMyEvents = async () => {
+    Toast.show({
+      type: 'info',
+      text1: '📝 Evenimentele Tale',
+      text2: 'Se încarcă evenimentele publicate...',
+      position: 'top',
+      visibilityTime: 2000,
+      topOffset: 50,
+    });
+    
+    // Aici poți adăuga logică pentru a afișa evenimentele create
+  };
+
+  const handleStatistics = () => {
+    const stats = {
+      attended: Math.floor(Math.random() * 20) + 5,
+      published: Math.floor(Math.random() * 10) + 1,
+      favorites: Math.floor(Math.random() * 15) + 3
+    };
+    
+    Alert.alert(
+      '📊 Statisticile Tale',
+      `🎉 Evenimente participat: ${stats.attended}\n📝 Evenimente publicate: ${stats.published}\n❤️ Evenimente favorite: ${stats.favorites}`,
+      [{ text: 'OK' }]
+    );
+  };
+
+  const handleInviteFriends = async () => {
+    try {
+      const result = await Share.share({
+        message: `Hei! 🎉 Încearcă aplicația UndeMergem pentru a descoperi cele mai tari evenimente din oraș! 📍`,
+        title: 'UndeMergem - Descoperă Evenimente'
+      });
+
+      if (result.action === Share.sharedAction) {
+        Toast.show({
+          type: 'success',
+          text1: '✅ Mulțumim!',
+          text2: 'Ai distribuit aplicația cu succes',
+          position: 'top',
+          visibilityTime: 2000,
+          topOffset: 50,
+        });
+      }
+    } catch (error) {
+      Toast.show({
+        type: 'error',
+        text1: '❌ Eroare',
+        text2: 'Nu s-a putut distribui aplicația',
+        position: 'top',
+        visibilityTime: 2000,
+        topOffset: 50,
+      });
+    }
+  };
+
+  const handleHelp = () => {
+    Alert.alert(
+      '❓ Ajutor & Suport',
+      'Alege o opțiune:',
+      [
+        {
+          text: 'Întrebări Frecvente',
+          onPress: () => {
+            Toast.show({
+              type: 'info',
+              text1: '📚 FAQ',
+              text2: 'Se deschide secțiunea FAQ...',
+              position: 'top',
+              visibilityTime: 2000,
+              topOffset: 50,
+            });
+          }
+        },
+        {
+          text: 'Contactează Suport',
+          onPress: () => {
+            Linking.openURL('mailto:support@undemergem.ro?subject=Suport UndeMergem');
+          }
+        },
+        {
+          text: 'Anulează',
+          style: 'cancel'
+        }
+      ]
+    );
+  };
+
+  const handleAbout = () => {
+    setShowAboutModal(true);
+  };
+
+  const handleSettings = () => {
+    Toast.show({
+      type: 'info',
+      text1: '⚙️ Setări',
+      text2: 'Funcționalitate în dezvoltare...',
+      position: 'top',
+      visibilityTime: 2000,
+      topOffset: 50,
+    });
+  };
+
+  const handleFavorites = () => {
+    Toast.show({
+      type: 'info',
+      text1: '❤️ Favorite',
+      text2: 'Se încarcă evenimentele favorite...',
+      position: 'top',
+      visibilityTime: 2000,
+      topOffset: 50,
+    });
+  };
+
   if (isLoggedIn) {
     return (
       <View style={styles.loggedInContainer}>
@@ -211,23 +383,264 @@ export default function Cont({ userData, setUserData, onLogout }) {
             </View>
         </LinearGradient>
         
-        <View style={styles.menuContainer}>
-            <TouchableOpacity style={styles.menuItem}>
-                <Ionicons name="settings-outline" size={24} color="#333" />
+        <ScrollView style={styles.menuScrollContainer} showsVerticalScrollIndicator={false}>
+          <View style={styles.menuContainer}>
+            
+            {/* Secțiunea Cont */}
+            <Text style={styles.sectionTitle}>Contul Meu</Text>
+            
+            <TouchableOpacity style={styles.menuItem} onPress={handleSettings}>
+                <View style={styles.menuIconContainer}>
+                  <Ionicons name="settings-outline" size={24} color="#2e0249" />
+                </View>
                 <Text style={styles.menuText}>Setări Cont</Text>
                 <Ionicons name="chevron-forward" size={24} color="#ccc" />
             </TouchableOpacity>
             
-            <TouchableOpacity style={styles.menuItem}>
-                <Ionicons name="heart-outline" size={24} color="#333" />
+            <TouchableOpacity style={styles.menuItem} onPress={handleFavorites}>
+                <View style={styles.menuIconContainer}>
+                  <Ionicons name="heart-outline" size={24} color="#e74c3c" />
+                </View>
                 <Text style={styles.menuText}>Evenimente Favorite</Text>
                 <Ionicons name="chevron-forward" size={24} color="#ccc" />
             </TouchableOpacity>
 
+            <TouchableOpacity style={styles.menuItem} onPress={handleHistory}>
+                <View style={styles.menuIconContainer}>
+                  <FontAwesome5 name="history" size={22} color="#3498db" />
+                </View>
+                <Text style={styles.menuText}>Istoric Evenimente</Text>
+                <Ionicons name="chevron-forward" size={24} color="#ccc" />
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.menuItem} onPress={handleMyEvents}>
+                <View style={styles.menuIconContainer}>
+                  <MaterialIcons name="event-note" size={24} color="#9b59b6" />
+                </View>
+                <Text style={styles.menuText}>Evenimentele Mele</Text>
+                <Ionicons name="chevron-forward" size={24} color="#ccc" />
+            </TouchableOpacity>
+
+            {/* Secțiunea Activitate */}
+            <Text style={styles.sectionTitle}>Activitate</Text>
+
+            <TouchableOpacity style={styles.menuItem} onPress={handleStatistics}>
+                <View style={styles.menuIconContainer}>
+                  <Ionicons name="stats-chart" size={24} color="#f39c12" />
+                </View>
+                <Text style={styles.menuText}>Statistici</Text>
+                <Ionicons name="chevron-forward" size={24} color="#ccc" />
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.menuItem} onPress={handleNotifications}>
+                <View style={styles.menuIconContainer}>
+                  <Ionicons name={notificationsEnabled ? "notifications" : "notifications-off"} size={24} color="#1abc9c" />
+                </View>
+                <View style={styles.menuTextContainer}>
+                  <Text style={styles.menuText}>Notificări</Text>
+                  <Text style={styles.menuSubtext}>
+                    {notificationsEnabled ? 'Active' : 'Dezactivate'}
+                  </Text>
+                </View>
+                <Switch
+                  value={notificationsEnabled}
+                  onValueChange={(value) => {
+                    setNotificationsEnabled(value);
+                    Toast.show({
+                      type: value ? 'success' : 'info',
+                      text1: value ? '🔔 Notificări activate' : '🔕 Notificări dezactivate',
+                      text2: value ? 'Vei fi notificat despre evenimente' : 'Nu vei primi notificări',
+                      position: 'top',
+                      visibilityTime: 2000,
+                      topOffset: 50,
+                    });
+                  }}
+                  trackColor={{ false: '#ccc', true: '#a81858' }}
+                  thumbColor={notificationsEnabled ? '#fff' : '#f4f3f4'}
+                />
+            </TouchableOpacity>
+
+            {/* Secțiunea Social */}
+            <Text style={styles.sectionTitle}>Social</Text>
+
+            <TouchableOpacity style={styles.menuItem} onPress={handleInviteFriends}>
+                <View style={styles.menuIconContainer}>
+                  <Feather name="share-2" size={22} color="#e67e22" />
+                </View>
+                <Text style={styles.menuText}>Invită Prieteni</Text>
+                <Ionicons name="chevron-forward" size={24} color="#ccc" />
+            </TouchableOpacity>
+
+            {/* Secțiunea Suport */}
+            <Text style={styles.sectionTitle}>Suport</Text>
+
+            <TouchableOpacity style={styles.menuItem} onPress={handleHelp}>
+                <View style={styles.menuIconContainer}>
+                  <AntDesign name="questioncircleo" size={22} color="#34495e" />
+                </View>
+                <Text style={styles.menuText}>Ajutor & Suport</Text>
+                <Ionicons name="chevron-forward" size={24} color="#ccc" />
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.menuItem} onPress={handleAbout}>
+                <View style={styles.menuIconContainer}>
+                  <Feather name="info" size={22} color="#95a5a6" />
+                </View>
+                <Text style={styles.menuText}>Despre Aplicație</Text>
+                <Ionicons name="chevron-forward" size={24} color="#ccc" />
+            </TouchableOpacity>
+
             <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+                <Ionicons name="log-out-outline" size={24} color="#ff4444" />
                 <Text style={styles.logoutButtonText}>Deconectare</Text>
             </TouchableOpacity>
-        </View>
+          </View>
+        </ScrollView>
+
+        {/* Modal Despre Aplicație */}
+        <Modal
+          animationType="slide"
+          transparent={true}
+          visible={showAboutModal}
+          onRequestClose={() => setShowAboutModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContainer}>
+              <ScrollView showsVerticalScrollIndicator={false}>
+                
+                {/* Header Modal */}
+                <View style={styles.modalHeader}>
+                  <View style={styles.modalIconWrapper}>
+                    <FontAwesome5 name="calendar-alt" size={40} color="#fff" />
+                    <View style={styles.modalPinIcon}>
+                      <FontAwesome5 name="map-marker-alt" size={18} color="#2e0249" />
+                    </View>
+                  </View>
+                  <Text style={styles.modalTitle}>UndeMergem?</Text>
+                  <Text style={styles.modalVersion}>Versiune 1.0.0</Text>
+                </View>
+
+                {/* Descriere */}
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalSectionTitle}>📱 Despre Aplicație</Text>
+                  <Text style={styles.modalText}>
+                    UndeMergem este aplicația ta personală pentru descoperirea celor mai tari evenimente din oraș! 
+                    Fie că ești pasionat de muzică live, teatru, sport sau socializare, noi te ajutăm să găsești 
+                    evenimentele perfecte pentru tine.
+                  </Text>
+                </View>
+
+                {/* Features */}
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalSectionTitle}>✨ Funcționalități</Text>
+                  <View style={styles.featureItem}>
+                    <Ionicons name="search" size={20} color="#2e0249" />
+                    <Text style={styles.featureText}>Căutare inteligentă evenimente</Text>
+                  </View>
+                  <View style={styles.featureItem}>
+                    <Ionicons name="location" size={20} color="#2e0249" />
+                    <Text style={styles.featureText}>Harta interactivă cu evenimente</Text>
+                  </View>
+                  <View style={styles.featureItem}>
+                    <Ionicons name="heart" size={20} color="#2e0249" />
+                    <Text style={styles.featureText}>Salvează evenimentele favorite</Text>
+                  </View>
+                  <View style={styles.featureItem}>
+                    <Ionicons name="add-circle" size={20} color="#2e0249" />
+                    <Text style={styles.featureText}>Publică propriile evenimente</Text>
+                  </View>
+                  <View style={styles.featureItem}>
+                    <Ionicons name="notifications" size={20} color="#2e0249" />
+                    <Text style={styles.featureText}>Notificări personalizate</Text>
+                  </View>
+                </View>
+
+                {/* Informații Contact */}
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalSectionTitle}>📧 Contact</Text>
+                  <TouchableOpacity 
+                    style={styles.contactButton}
+                    onPress={() => Linking.openURL('mailto:contact@undemergem.ro')}
+                  >
+                    <MaterialIcons name="email" size={20} color="#2e0249" />
+                    <Text style={styles.contactButtonText}>contact@undemergem.ro</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.contactButton}
+                    onPress={() => Linking.openURL('https://undemergem.ro')}
+                  >
+                    <Ionicons name="globe" size={20} color="#2e0249" />
+                    <Text style={styles.contactButtonText}>www.undemergem.ro</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Team */}
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalSectionTitle}>👥 Echipa</Text>
+                  <Text style={styles.modalText}>
+                    Dezvoltat cu ❤️ de către echipa UndeMergem
+                  </Text>
+                  <Text style={styles.modalSubtext}>
+                    Proiect PAAM - 2026
+                  </Text>
+                </View>
+
+                {/* Legal */}
+                <View style={styles.modalSection}>
+                  <TouchableOpacity 
+                    style={styles.legalButton}
+                    onPress={() => {
+                      Toast.show({
+                        type: 'info',
+                        text1: '📄 Termeni și Condiții',
+                        text2: 'Se deschide documentul...',
+                        position: 'top',
+                        visibilityTime: 2000,
+                        topOffset: 50,
+                      });
+                    }}
+                  >
+                    <Text style={styles.legalButtonText}>Termeni și Condiții</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.legalButton}
+                    onPress={() => {
+                      Toast.show({
+                        type: 'info',
+                        text1: '🔒 Politica de Confidențialitate',
+                        text2: 'Se deschide documentul...',
+                        position: 'top',
+                        visibilityTime: 2000,
+                        topOffset: 50,
+                      });
+                    }}
+                  >
+                    <Text style={styles.legalButtonText}>Politica de Confidențialitate</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Copyright */}
+                <Text style={styles.copyrightText}>© 2026 UndeMergem. Toate drepturile rezervate.</Text>
+
+              </ScrollView>
+
+              {/* Close Button */}
+              <TouchableOpacity 
+                style={styles.modalCloseButton}
+                onPress={() => setShowAboutModal(false)}
+              >
+                <LinearGradient
+                  colors={['#d53369', '#c026d3']}
+                  start={{x: 0, y: 0}} 
+                  end={{x: 1, y: 0}}
+                  style={styles.modalCloseButtonGradient}
+                >
+                  <Text style={styles.modalCloseButtonText}>Închide</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       </View>
     );
   }
@@ -603,9 +1016,20 @@ const styles = StyleSheet.create({
     color: '#5e1059',
     fontWeight: '600',
   },
+  menuScrollContainer: {
+    flex: 1,
+  },
   menuContainer: {
     padding: 20,
-    marginTop: 20,
+    paddingBottom: 40,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#2e0249',
+    marginTop: 15,
+    marginBottom: 10,
+    marginLeft: 5,
   },
   menuItem: {
     flexDirection: 'row',
@@ -613,33 +1037,191 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     padding: 15,
     borderRadius: 15,
-    marginBottom: 15,
+    marginBottom: 10,
     shadowColor: "#000",
     shadowOffset: {
         width: 0,
-        height: 1,
+        height: 2,
     },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  menuIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f8f9fa',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  menuTextContainer: {
+    flex: 1,
+    marginLeft: 3,
   },
   menuText: {
     flex: 1,
-    marginLeft: 15,
+    marginLeft: 3,
     fontSize: 16,
     color: '#333',
+    fontWeight: '500',
+  },
+  menuSubtext: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 2,
   },
   logoutButton: {
-    marginTop: 20,
+    marginTop: 25,
     backgroundColor: '#fff',
     padding: 15,
     borderRadius: 15,
+    flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
+    justifyContent: 'center',
+    borderWidth: 2,
     borderColor: '#ff4444',
+    shadowColor: "#ff4444",
+    shadowOffset: {
+        width: 0,
+        height: 2,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
   },
   logoutButtonText: {
     color: '#ff4444',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 8,
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 25,
+    width: width * 0.9,
+    maxHeight: '85%',
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  modalHeader: {
+    alignItems: 'center',
+    marginBottom: 25,
+    paddingTop: 10,
+  },
+  modalIconWrapper: {
+    position: 'relative',
+    marginBottom: 15,
+  },
+  modalPinIcon: {
+    position: 'absolute',
+    bottom: -5,
+    right: -5,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 3,
+  },
+  modalTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#2e0249',
+    marginBottom: 5,
+  },
+  modalVersion: {
+    fontSize: 14,
+    color: '#999',
+    fontStyle: 'italic',
+  },
+  modalSection: {
+    marginBottom: 20,
+  },
+  modalSectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#2e0249',
+    marginBottom: 10,
+  },
+  modalText: {
+    fontSize: 14,
+    color: '#555',
+    lineHeight: 22,
+    textAlign: 'justify',
+  },
+  modalSubtext: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 5,
+    fontStyle: 'italic',
+  },
+  featureItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    paddingLeft: 10,
+  },
+  featureText: {
+    fontSize: 14,
+    color: '#555',
+    marginLeft: 12,
+    flex: 1,
+  },
+  contactButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+  contactButtonText: {
+    fontSize: 14,
+    color: '#2e0249',
+    marginLeft: 10,
+    fontWeight: '500',
+  },
+  legalButton: {
+    paddingVertical: 8,
+    marginBottom: 8,
+  },
+  legalButtonText: {
+    fontSize: 14,
+    color: '#a81858',
+    textDecorationLine: 'underline',
+  },
+  copyrightText: {
+    fontSize: 12,
+    color: '#999',
+    textAlign: 'center',
+    marginTop: 10,
+    marginBottom: 15,
+  },
+  modalCloseButton: {
+    marginTop: 15,
+    borderRadius: 25,
+    overflow: 'hidden',
+  },
+  modalCloseButtonGradient: {
+    paddingVertical: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCloseButtonText: {
+    color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
   },

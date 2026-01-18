@@ -37,7 +37,20 @@ export default function Exploreaza({ userData, onNavigateToAccount, onEventPress
   const fetchEvents = async () => {
     try {
       const response = await fetch(EVENTS_URL);
-      const data = await response.json();
+      const contentType = response.headers?.get?.('content-type') || '';
+      const rawBody = await response.text();
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status} from ${EVENTS_URL}: ${rawBody.slice(0, 200)}`);
+      }
+
+      if (!contentType.toLowerCase().includes('application/json')) {
+        throw new Error(
+          `Expected JSON from ${EVENTS_URL} but got '${contentType || 'unknown'}': ${rawBody.slice(0, 200)}`
+        );
+      }
+
+      const data = JSON.parse(rawBody);
       
       // Group events by category
       const groupedEvents = {};
@@ -96,7 +109,7 @@ export default function Exploreaza({ userData, onNavigateToAccount, onEventPress
       setEventsData(groupedEvents);
       setLoading(false);
     } catch (err) {
-      console.error('Error fetching events:', err);
+      console.error('Error fetching events:', err?.message || err);
       setError('Nu s-au putut încărca evenimentele');
       setLoading(false);
     }
