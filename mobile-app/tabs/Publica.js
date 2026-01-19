@@ -25,6 +25,10 @@ export default function Publica() {
   const [category, setCategory] = useState('');
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
 
+  // Ticket / Price Logic
+  const [isFree, setIsFree] = useState(true);
+  const [price, setPrice] = useState('');
+
   // Image Logic
   const [image, setImage] = useState(null);
   const [showImageInput, setShowImageInput] = useState(false);
@@ -111,8 +115,8 @@ export default function Publica() {
       Alert.alert('Eroare', 'Categoria este obligatorie');
       return;
     }
-    if (!image) {
-      Alert.alert('Eroare', 'Imaginea este obligatorie');
+    if (!isFree && !price.trim()) {
+      Alert.alert('Eroare', 'Introdu prețul biletului sau marchează evenimentul ca gratuit');
       return;
     }
 
@@ -129,8 +133,8 @@ export default function Publica() {
       date: day,
       month: month,
       time: time,
-      price: 'Gratuit', // Default value
-      image: image,
+      price: isFree ? 'Gratuit' : price.trim(),
+      image: image || '',
       category: category,
       organizer: 'Utilizator',
       contactEmail: 'contact@events.ro',
@@ -194,6 +198,8 @@ export default function Publica() {
               setTime('');
               setCategory('');
               setImage(null);
+              setIsFree(true);
+              setPrice('');
               setTempDay('');
               setTempMonth('');
               setTempYear('');
@@ -330,6 +336,33 @@ export default function Publica() {
               </Text>
               <Ionicons name="chevron-down" size={20} color="#9CA3AF" />
             </TouchableOpacity>
+          </View>
+
+          {/* Ticket / Price */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Bilet</Text>
+            <TouchableOpacity
+              style={styles.checkboxRow}
+              onPress={() => setIsFree(prev => !prev)}
+            >
+              <Ionicons
+                name={isFree ? 'checkbox-outline' : 'square-outline'}
+                size={20}
+                color="#7E57C2"
+              />
+              <Text style={styles.checkboxLabel}>Eveniment gratuit</Text>
+            </TouchableOpacity>
+            <TextInput
+              style={[
+                styles.input,
+                isFree && styles.disabledInput,
+              ]}
+              placeholder="Introdu prețul biletului (ex: 50 lei)"
+              placeholderTextColor="#9CA3AF"
+              value={price}
+              onChangeText={setPrice}
+              editable={!isFree}
+            />
           </View>
 
           {/* Image Upload */}
@@ -769,5 +802,19 @@ const styles = StyleSheet.create({
     color: '#7E57C2',
     fontWeight: '600',
     fontSize: 14,
+  },
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  checkboxLabel: {
+    marginLeft: 8,
+    fontSize: 14,
+    color: '#374151',
+  },
+  disabledInput: {
+    backgroundColor: '#F9FAFB',
+    color: '#9CA3AF',
   },
 });
