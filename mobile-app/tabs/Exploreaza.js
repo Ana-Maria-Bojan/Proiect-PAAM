@@ -7,26 +7,10 @@ const CATEGORIES = ['Fluxul meu', 'Festival', 'Concerte', 'Teatru', 'Sport', 'So
 // API_URL este acum importat din config.js si se seteaza automat
 const EVENTS_URL = `${API_URL}/events`;
 
-const SUGGESTIONS = [ 
-  {
-    id: 'sug1',
-    title: 'Tur ghidat Cetate',
-    date: 'Sâmbătă',
-    time: '10:00',
-    image: 'https://images.unsplash.com/photo-1541963463532-d68292c34b19?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60',
-  },
-  { 
-    id: 'sug2',
-    title: 'Expoziție Brâncuși',
-    date: 'Duminică',
-    time: '11:00',
-    image: 'https://images.unsplash.com/photo-1518998053901-5348d3969105?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60',
-  }
-]; 
-
 export default function Exploreaza({ userData, onNavigateToAccount, onEventPress, favoriteEventIds = [], onToggleFavorite }) {
   const [activeCategory, setActiveCategory] = useState('Fluxul meu');
   const [eventsData, setEventsData] = useState({});
+  const [suggestions, setSuggestions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -118,6 +102,13 @@ export default function Exploreaza({ userData, onNavigateToAccount, onEventPress
       }
 
       setEventsData(groupedEvents);
+      
+      // Selectăm 2 evenimente aleatorii pentru sugestii
+      const allEvents = [...data];
+      const shuffled = allEvents.sort(() => 0.5 - Math.random());
+      const selectedSuggestions = shuffled.slice(0, 2);
+      setSuggestions(selectedSuggestions);
+      
       setLoading(false);
     } catch (err) {
       console.error('Error fetching events:', err?.message || err);
@@ -264,8 +255,13 @@ export default function Exploreaza({ userData, onNavigateToAccount, onEventPress
       {/* Suggestions */}
       <View style={styles.suggestionsSection}>
         <Text style={styles.sectionTitle}>Sugestii pentru tine</Text>
-        {SUGGESTIONS.map(item => (
-          <View key={item.id} style={styles.suggestionCard}>
+        {suggestions.map((item, index) => (
+          <TouchableOpacity 
+            key={item._id || item.id || index} 
+            style={styles.suggestionCard}
+            onPress={() => onEventPress && onEventPress(item._id || item.id)}
+            activeOpacity={0.7}
+          >
             <Image source={{ uri: item.image }} style={styles.suggestionImage} />
             <View style={styles.suggestionInfo}>
               <Text style={styles.suggestionTitle}>{item.title}</Text>
@@ -276,7 +272,7 @@ export default function Exploreaza({ userData, onNavigateToAccount, onEventPress
                 <Text style={styles.suggestionDate}>{item.time}</Text>
               </View>
             </View>
-          </View>
+          </TouchableOpacity>
         ))}
       </View>
       
