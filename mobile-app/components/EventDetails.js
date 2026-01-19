@@ -7,7 +7,7 @@ import { API_URL } from '../config';
 
 const { width, height } = Dimensions.get('window');
 
-export default function EventDetails({ eventId, onBack, isFavorite, onToggleFavorite }) {
+export default function EventDetails({ eventId, onBack, isFavorite, onToggleFavorite, onNavigateToMap }) {
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -133,11 +133,16 @@ export default function EventDetails({ eventId, onBack, isFavorite, onToggleFavo
 
           {/* Info Cards */}
           <View style={styles.infoCardsContainer}>
-            <View style={styles.infoCard}>
+            <TouchableOpacity 
+              style={styles.infoCard} 
+              onPress={() => onNavigateToMap && onNavigateToMap(event)}
+              activeOpacity={0.7}
+            >
               <Ionicons name="location" size={24} color="#FF3366" />
               <Text style={styles.infoCardTitle}>Locație</Text>
               <Text style={styles.infoCardText}>{event.location}</Text>
-            </View>
+              <Text style={styles.viewOnMapHint}>👆 Vezi pe hartă</Text>
+            </TouchableOpacity>
 
             <View style={styles.infoCard}>
               <Ionicons name="time" size={24} color="#FF3366" />
@@ -516,6 +521,12 @@ const styles = StyleSheet.create({
   backButtonText: {
     color: '#fff',
     fontSize: 16,
+    fontWeight: '600',
+  },
+  viewOnMapHint: {
+    fontSize: 10,
+    color: '#FF3366',
+    marginTop: 4,
     fontWeight: '600',
   },
 });

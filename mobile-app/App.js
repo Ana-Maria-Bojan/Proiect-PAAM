@@ -22,6 +22,7 @@ export default function App() {
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [selectedEventId, setSelectedEventId] = useState(null);
   const [favoriteEventIds, setFavoriteEventIds] = useState([]);
+  const [mapTargetEvent, setMapTargetEvent] = useState(null); // Eveniment pentru hartă
 
   // Încarcă datele utilizatorului salvate la pornirea aplicației
   useEffect(() => {
@@ -89,6 +90,12 @@ export default function App() {
   const navigateToTab = (tab) => {
     setSelectedEventId(null);
     setActiveTab(tab);
+  };
+
+  const handleNavigateToMap = (event) => {
+    setMapTargetEvent(event);
+    setSelectedEventId(null);
+    setActiveTab('harta');
   };
 
   const toggleFavorite = async (eventId) => {
@@ -163,6 +170,7 @@ export default function App() {
           onBack={handleBackFromEvent}
           isFavorite={favoriteEventIds.includes(selectedEventId)}
           onToggleFavorite={() => toggleFavorite(selectedEventId)}
+          onNavigateToMap={handleNavigateToMap}
         />
       );
     }
@@ -179,7 +187,7 @@ export default function App() {
           />
         );
       case 'harta':
-        return <Harta />;
+        return <Harta targetEvent={mapTargetEvent} onClearTarget={() => setMapTargetEvent(null)} />;
       case 'publica':
         return <Publica />;
       case 'favorite':

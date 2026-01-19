@@ -3,7 +3,7 @@ import { StyleSheet, Text, View, ActivityIndicator } from 'react-native';
 import * as Location from 'expo-location';
 import Map from '../components/Map';
 
-export default function Harta() {
+export default function Harta({ targetEvent, onClearTarget }) {
   const [location, setLocation] = useState(null);
   const [address, setAddress] = useState('Se localizează...');
   const [errorMsg, setErrorMsg] = useState(null);
@@ -152,6 +152,9 @@ export default function Harta() {
         {location && (
           <Text style={styles.subtitle}>📍 {address}</Text>
         )}
+        {targetEvent && (
+          <Text style={styles.eventTarget}>🎯 {targetEvent.title}</Text>
+        )}
       </View>
       
       <View style={styles.content}>
@@ -160,7 +163,7 @@ export default function Harta() {
         ) : errorMsg ? (
           <Text style={styles.errorText}>{errorMsg}</Text>
         ) : location ? (
-          <Map location={location} />
+          <Map location={location} targetEvent={targetEvent} onClearTarget={onClearTarget} />
         ) : (
            <Text>Se încarcă harta...</Text>
         )}
@@ -192,6 +195,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     marginTop: 5,
+    textAlign: 'center',
+  },
+  eventTarget: {
+    fontSize: 11,
+    color: '#FF3366',
+    marginTop: 3,
+    fontWeight: '600',
     textAlign: 'center',
   },
   content: {
