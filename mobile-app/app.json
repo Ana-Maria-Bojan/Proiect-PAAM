@@ -14,7 +14,8 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "This app needs access to your location to show it on the map."
+        "NSLocationWhenInUseUsageDescription": "This app needs access to your location to show it on the map.",
+        "NSPhotoLibraryUsageDescription": "Aplicația are nevoie de acces la galeria foto pentru a adăuga imagini la evenimente."
       }
     },
     "android": {
@@ -25,7 +26,8 @@
       "edgeToEdgeEnabled": true,
       "permissions": [
         "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION"
+        "ACCESS_FINE_LOCATION",
+        "READ_MEDIA_IMAGES"
       ]
     },
     "web": {

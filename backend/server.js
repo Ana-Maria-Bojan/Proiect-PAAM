@@ -57,8 +57,8 @@ app.post('/api/events', async (req, res) => {
       website,
     } = req.body;
 
-    // Validate required fields
-    if (!title || !location || !date || !month || !time || !price || !image || !category) {
+    // Validate required fields (imaginea NU mai este obligatorie)
+    if (!title || !location || !date || !month || !time || !price || !category) {
       return res.status(400).json({ message: 'Toate câmpurile obligatorii trebuie completate' });
     }
 
@@ -77,7 +77,7 @@ app.post('/api/events', async (req, res) => {
       month,
       time,
       price,
-      image,
+      image: image || '',
       category,
       organizer: organizer || '',
       contactEmail: contactEmail || '',
