@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, Platform, Dimensions, Modal, FlatList, Image, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as ImagePicker from 'expo-image-picker';
+import { API_URL } from '../config';
 
 const { width } = Dimensions.get('window');
 
@@ -55,6 +57,161 @@ export default function Publica() {
     if (imageUrl) {
       setImage(imageUrl);
       setShowImageInput(false);
+    }
+  };
+
+  const pickImageFromGallery = async () => {
+    try {
+      // Request permission
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permisiune necesară', 'Avem nevoie de permisiunea pentru a accesa galeria');
+        return;
+      }
+
+      // Launch image picker
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [16, 9],
+        quality: 0.8,
+      });
+
+      if (!result.canceled) {
+        setImage(result.assets[0].uri);
+      }
+    } catch (error) {
+      Alert.alert('Eroare', 'Nu am putut selecta imaginea');
+    }
+  };
+
+  const handlePublish = async () => {
+    // Validate all fields
+    if (!title.trim()) {
+      Alert.alert('Eroare', 'Titlul este obligatoriu');
+      return;
+    }
+    if (!description.trim()) {
+      Alert.alert('Eroare', 'Descrierea este obligatorie');
+      return;
+    }
+    if (!location.trim()) {
+      Alert.alert('Eroare', 'Locația este obligatorie');
+      return;
+    }
+    if (!date) {
+      Alert.alert('Eroare', 'Data este obligatorie');
+      return;
+    }
+    if (!time) {
+      Alert.alert('Eroare', 'Ora este obligatorie');
+      return;
+    }
+    if (!category) {
+      Alert.alert('Eroare', 'Categoria este obligatorie');
+      return;
+    }
+    if (!image) {
+      Alert.alert('Eroare', 'Imaginea este obligatorie');
+      return;
+    }
+
+    // Extract month from date
+    const dateParts = date.split('/');
+    const monthNames = ['Ian', 'Feb', 'Mar', 'Apr', 'Mai', 'Iun', 'Iul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const month = monthNames[parseInt(dateParts[1]) - 1] || 'Ian';
+    const day = dateParts[0];
+
+    const eventData = {
+      title: title.trim(),
+      description: description.trim(),
+      location: location.trim(),
+      date: day,
+      month: month,
+      time: time,
+      price: 'Gratuit', // Default value
+      image: image,
+      category: category,
+      organizer: 'Utilizator',
+      contactEmail: 'contact@events.ro',
+      contactPhone: '+40 256 123 456',
+      maxAttendees: 100,
+      currentAttendees: 0,
+      tags: [category, location],
+      website: '',
+    };
+
+    try {
+      const response = await fetch(`${API_URL}/events`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify(eventData),
+      });
+
+      // Handle 503 - server might be waking up
+      if (response.status === 503) {
+        Alert.alert('Serverul pornește...', 'Serverul este în proces de pornire. Așteaptă 30 secunde și încearcă din nou.');
+        return;
+      }
+
+      const contentType = response.headers?.get?.('content-type') || '';
+      const responseText = await response.text();
+      let data;
+      
+      // Check if response is JSON
+      if (contentType.includes('application/json')) {
+        try {
+          data = JSON.parse(responseText);
+        } catch (parseError) {
+          console.error('JSON parse error:', responseText.substring(0, 200));
+          Alert.alert('Eroare server', 'Serverul a returnat un răspuns invalid. Încearcă din nou.');
+          return;
+        }
+      } else {
+        // Server returned HTML or other non-JSON content
+        console.error('Non-JSON response:', responseText.substring(0, 200));
+        if (responseText.includes('<!DOCTYPE') || responseText.includes('<html')) {
+          Alert.alert('Serverul pornește...', 'Serverul Render este în proces de pornire. Așteaptă 30-60 secunde și încearcă din nou.');
+        } else {
+          Alert.alert('Eroare', 'Serverul nu răspunde corect. Verifică conexiunea.');
+        }
+        return;
+      }
+
+      if (response.ok) {
+        Alert.alert('Succes!', 'Evenimentul a fost publicat cu succes!', [
+          {
+            text: 'OK',
+            onPress: () => {
+              // Reset form
+              setTitle('');
+              setDescription('');
+              setLocation('');
+              setDate('');
+              setTime('');
+              setCategory('');
+              setImage(null);
+              setTempDay('');
+              setTempMonth('');
+              setTempYear('');
+              setTempHour('');
+              setTempMinute('');
+            },
+          },
+        ]);
+      } else {
+        Alert.alert('Eroare', data.message || 'Nu am putut publica evenimentul');
+      }
+    } catch (error) {
+      console.error('Error publishing event:', error);
+      if (error.message.includes('Network request failed') || error.message.includes('timeout')) {
+        Alert.alert('Eroare de conexiune', 'Serverul nu răspunde. Verifică conexiunea la internet sau încearcă din nou în câteva secunde.');
+      } else {
+        Alert.alert('Eroare', `Nu am putut conecta la server: ${error.message}`);
+      }
     }
   };
 
@@ -180,7 +337,7 @@ export default function Publica() {
             <Text style={styles.label}>Imagine Eveniment</Text>
             <TouchableOpacity 
               style={styles.uploadContainer}
-              onPress={() => setShowImageInput(true)}
+              onPress={pickImageFromGallery}
             >
               {image ? (
                 <Image source={{ uri: image }} style={styles.uploadedImage} />
@@ -190,14 +347,22 @@ export default function Publica() {
                     <Ionicons name="camera" size={30} color="#fff" />
                   </View>
                   <View style={styles.uploadButton}>
-                    <Text style={styles.uploadButtonText}>Adaugă Fotografii</Text>
+                    <Text style={styles.uploadButtonText}>Alege din Galerie</Text>
                   </View>
                 </>
               )}
             </TouchableOpacity>
+            {image && (
+              <TouchableOpacity 
+                style={styles.changeImageButton}
+                onPress={pickImageFromGallery}
+              >
+                <Text style={styles.changeImageText}>Schimbă imaginea</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
-          <TouchableOpacity style={styles.submitButton}>
+          <TouchableOpacity style={styles.submitButton} onPress={handlePublish}>
             <Text style={styles.submitButtonText}>Publică Eveniment</Text>
           </TouchableOpacity>
 
@@ -594,5 +759,15 @@ const styles = StyleSheet.create({
     marginTop: 10,
     textAlign: 'center',
     fontStyle: 'italic',
-  }
+  },
+  changeImageButton: {
+    marginTop: 10,
+    alignItems: 'center',
+    padding: 10,
+  },
+  changeImageText: {
+    color: '#7E57C2',
+    fontWeight: '600',
+    fontSize: 14,
+  },
 });

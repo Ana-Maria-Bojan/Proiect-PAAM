@@ -1,8 +1,8 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
-const DEFAULT_API_URL = 'http://localhost:5000/api';
-const ANDROID_EMULATOR_API_URL = 'http://10.0.2.2:5000/api';
+const DEFAULT_API_URL = 'https://proiect-paam.onrender.com/api';
+const ANDROID_EMULATOR_API_URL = 'https://proiect-paam.onrender.com/api';
 
 const normalizeUrl = (url) => {
   if (!url) return url;

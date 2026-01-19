@@ -385,9 +385,9 @@ const run = async () => {
         console.log('Scraper conectat la MongoDB');
 
         // --- CURATARE DB (Opțional: decomentează dacă vrei să ștergi totul înainte) ---
-        console.log('Ștergem evenimentele vechi pentru a evita duplicatele...');
-        await Event.deleteMany({});
-        console.log('Baza de date a fost curățată.');
+        // console.log('Ștergem evenimentele vechi pentru a evita duplicatele...');
+        // await Event.deleteMany({});
+        // console.log('Baza de date a fost curățată.');
         
         // Rulăm scraping-ul pentru toate sursele
         await scrapeIaBilet();

@@ -35,6 +35,67 @@ app.get('/api/events', async (req, res) => {
   }
 });
 
+// Create a new event
+app.post('/api/events', async (req, res) => {
+  try {
+    const {
+      title,
+      description,
+      location,
+      date,
+      month,
+      time,
+      price,
+      image,
+      category,
+      organizer,
+      contactEmail,
+      contactPhone,
+      maxAttendees,
+      currentAttendees,
+      tags,
+      website,
+    } = req.body;
+
+    // Validate required fields
+    if (!title || !location || !date || !month || !time || !price || !image || !category) {
+      return res.status(400).json({ message: 'Toate câmpurile obligatorii trebuie completate' });
+    }
+
+    // Check if event with same title already exists
+    const existingEvent = await Event.findOne({ title });
+    if (existingEvent) {
+      return res.status(400).json({ message: 'Există deja un eveniment cu acest titlu' });
+    }
+
+    // Create new event
+    const newEvent = new Event({
+      title,
+      description: description || '',
+      location,
+      date,
+      month,
+      time,
+      price,
+      image,
+      category,
+      organizer: organizer || '',
+      contactEmail: contactEmail || '',
+      contactPhone: contactPhone || '',
+      maxAttendees: maxAttendees || 0,
+      currentAttendees: currentAttendees || 0,
+      tags: tags || [],
+      website: website || '',
+    });
+
+    const savedEvent = await newEvent.save();
+    res.status(201).json(savedEvent);
+  } catch (err) {
+    console.error('Error creating event:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // Get single event by ID
 app.get('/api/event/:id', async (req, res) => {
   try {

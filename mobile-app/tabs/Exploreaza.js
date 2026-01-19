@@ -34,20 +34,31 @@ export default function Exploreaza({ userData, onNavigateToAccount, onEventPress
     fetchEvents();
   }, [userData]); // Refetch when user logs in/out
 
-  const fetchEvents = async () => {
+  const fetchEvents = async (retryCount = 0) => {
     try {
-      const response = await fetch(EVENTS_URL);
+      const response = await fetch(EVENTS_URL, {
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
+      
       const contentType = response.headers?.get?.('content-type') || '';
       const rawBody = await response.text();
 
+      // Handle 503 (server sleeping on Render free tier - needs time to wake up)
+      if (response.status === 503 && retryCount < 3) {
+        console.log(`Server is waking up... Retry ${retryCount + 1}/3`);
+        setError(`Serverul pornește... (${retryCount + 1}/3)`);
+        await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
+        return fetchEvents(retryCount + 1);
+      }
+
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status} from ${EVENTS_URL}: ${rawBody.slice(0, 200)}`);
+        throw new Error(`HTTP ${response.status}`);
       }
 
       if (!contentType.toLowerCase().includes('application/json')) {
-        throw new Error(
-          `Expected JSON from ${EVENTS_URL} but got '${contentType || 'unknown'}': ${rawBody.slice(0, 200)}`
-        );
+        throw new Error(`Expected JSON but got '${contentType || 'unknown'}'`);
       }
 
       const data = JSON.parse(rawBody);
