@@ -1,11 +1,31 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, ScrollView, Image, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { API_URL } from '../config';
 
 export default function Favorite({ userData, favoriteEventIds = [], onEventPress, onToggleFavorite }) {
   const [favoriteEvents, setFavoriteEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const Header = ({ subtitle }) => (
+    <LinearGradient
+      colors={['#7E57C2', '#EC407A']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 0 }}
+      style={styles.headerGradient}
+    >
+      <View style={styles.headerContent}>
+        <View style={styles.headerIconCircle}>
+          <Ionicons name="heart" size={28} color="#fff" />
+        </View>
+        <View style={styles.headerTextContainer}>
+          <Text style={styles.headerTitle}>Favorite</Text>
+          <Text style={styles.headerSubtitle}>{subtitle}</Text>
+        </View>
+      </View>
+    </LinearGradient>
+  );
 
   useEffect(() => {
     if (userData && userData.id) {
@@ -36,11 +56,7 @@ export default function Favorite({ userData, favoriteEventIds = [], onEventPress
   if (!userData) {
     return (
       <ScrollView style={styles.container}>
-        <View style={styles.header}>
-          <Ionicons name="heart" size={48} color="#FF3366" />
-          <Text style={styles.title}>Favorite</Text>
-          <Text style={styles.subtitle}>Evenimentele tale preferate</Text>
-        </View>
+        <Header subtitle="Evenimentele tale preferate" />
         
         <View style={styles.content}>
           <View style={styles.emptyState}>
@@ -68,11 +84,7 @@ export default function Favorite({ userData, favoriteEventIds = [], onEventPress
   if (favoriteEvents.length === 0) {
     return (
       <ScrollView style={styles.container}>
-        <View style={styles.header}>
-          <Ionicons name="heart" size={48} color="#FF3366" />
-          <Text style={styles.title}>Favorite</Text>
-          <Text style={styles.subtitle}>Evenimentele tale preferate</Text>
-        </View>
+        <Header subtitle="Evenimentele tale preferate" />
         
         <View style={styles.content}>
           <View style={styles.emptyState}>
@@ -91,11 +103,13 @@ export default function Favorite({ userData, favoriteEventIds = [], onEventPress
 
   return (
     <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Ionicons name="heart" size={48} color="#FF3366" />
-        <Text style={styles.title}>Favorite</Text>
-        <Text style={styles.subtitle}>{favoriteEvents.length} {favoriteEvents.length === 1 ? 'eveniment' : 'evenimente'} salvate</Text>
-      </View>
+      <Header
+        subtitle={
+          favoriteEvents.length === 1
+            ? '1 eveniment salvat'
+            : `${favoriteEvents.length} evenimente salvate`
+        }
+      />
       
       <View style={styles.content}>
         {favoriteEvents.map((event, index) => (
@@ -159,31 +173,49 @@ export default function Favorite({ userData, favoriteEventIds = [], onEventPress
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F2F2F7',
+    backgroundColor: '#F3F4F6',
   },
   centerContent: {
     justifyContent: 'center',
     alignItems: 'center',
   },
-  header: {
-    backgroundColor: '#fff',
-    padding: 30,
+  headerGradient: {
     paddingTop: 50,
+    paddingBottom: 24,
+    paddingHorizontal: 20,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  headerContent: {
+    flexDirection: 'row',
     alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
   },
-  title: {
-    fontSize: 28,
+  headerIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  headerTextContainer: {
+    flex: 1,
+  },
+  headerTitle: {
+    fontSize: 24,
     fontWeight: 'bold',
-    color: '#000',
-    marginTop: 16,
+    color: '#fff',
   },
-  subtitle: {
-    fontSize: 16,
-    color: '#8E8E93',
-    marginTop: 8,
-    textAlign: 'center',
+  headerSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.9)',
+    marginTop: 4,
   },
   content: {
     flex: 1,

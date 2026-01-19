@@ -64,6 +64,17 @@ export default function Publica() {
     }
   };
 
+  const confirmImageAccess = () => {
+    Alert.alert(
+      'Acces la galerie',
+      'Permiți aplicației să acceseze galeria foto pentru a încărca o imagine la eveniment? Poți publica și fără poză.',
+      [
+        { text: 'Nu', style: 'cancel' },
+        { text: 'Da', onPress: () => { pickImageFromGallery(); } },
+      ],
+    );
+  };
+
   const pickImageFromGallery = async () => {
     try {
       // Request permission
@@ -257,7 +268,7 @@ export default function Publica() {
           
           {/* Title */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Titlul Evenimentului</Text>
+            <Text style={styles.label}>Titlul Evenimentului *</Text>
             <TextInput
               style={styles.input}
               placeholder="Introdu titlul evenimentului"
@@ -269,7 +280,7 @@ export default function Publica() {
 
           {/* Description */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Descriere</Text>
+            <Text style={styles.label}>Descriere *</Text>
             <TextInput
               style={[styles.input, styles.textArea]}
               placeholder="Scrie o descriere pentru evenimentul tău..."
@@ -283,7 +294,7 @@ export default function Publica() {
 
           {/* Location */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Locație</Text>
+            <Text style={styles.label}>Locație *</Text>
             <View style={styles.inputWithIconContainer}>
               <Ionicons name="location" size={20} color="#7E57C2" style={styles.inputIcon} />
               <TextInput
@@ -298,7 +309,7 @@ export default function Publica() {
 
           {/* Date & Time */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Data & Ora</Text>
+            <Text style={styles.label}>Data & Ora *</Text>
             <View style={styles.row}>
               <TouchableOpacity 
                 style={styles.dateInputContainer}
@@ -326,7 +337,7 @@ export default function Publica() {
 
           {/* Category */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Categorie</Text>
+            <Text style={styles.label}>Categorie *</Text>
             <TouchableOpacity 
               style={styles.dropdownInput}
               onPress={() => setShowCategoryPicker(true)}
@@ -340,7 +351,7 @@ export default function Publica() {
 
           {/* Ticket / Price */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Bilet</Text>
+            <Text style={styles.label}>Bilet *</Text>
             <TouchableOpacity
               style={styles.checkboxRow}
               onPress={() => setIsFree(prev => !prev)}
@@ -370,7 +381,7 @@ export default function Publica() {
             <Text style={styles.label}>Imagine Eveniment</Text>
             <TouchableOpacity 
               style={styles.uploadContainer}
-              onPress={pickImageFromGallery}
+              onPress={confirmImageAccess}
             >
               {image ? (
                 <Image source={{ uri: image }} style={styles.uploadedImage} />
@@ -388,7 +399,7 @@ export default function Publica() {
             {image && (
               <TouchableOpacity 
                 style={styles.changeImageButton}
-                onPress={pickImageFromGallery}
+                onPress={confirmImageAccess}
               >
                 <Text style={styles.changeImageText}>Schimbă imaginea</Text>
               </TouchableOpacity>

@@ -192,7 +192,14 @@ export default function App() {
           />
         );
       case 'cont':
-        return <Cont userData={userData} setUserData={setUserData} onLogout={handleLogout} />;
+        return (
+          <Cont 
+            userData={userData} 
+            setUserData={setUserData} 
+            onLogout={handleLogout}
+            onNavigateToFavorites={() => navigateToTab('favorite')}
+          />
+        );
       default:
         return <Exploreaza userData={userData} onEventPress={handleEventPress} />;
     }

@@ -23,7 +23,7 @@ const INTEREST_TAGS = [
   { id: 'tag12', label: 'Vibe', category: 'Festival' }
 ];
 
-export default function Cont({ userData, setUserData, onLogout }) {
+export default function Cont({ userData, setUserData, onLogout, onNavigateToFavorites }) {
   const [isLoggedIn, setIsLoggedIn] = useState(!!userData);
   
   const [isLoginView, setIsLoginView] = useState(true);
@@ -345,14 +345,18 @@ export default function Cont({ userData, setUserData, onLogout }) {
   };
 
   const handleFavorites = () => {
-    Toast.show({
-      type: 'info',
-      text1: '❤️ Favorite',
-      text2: 'Se încarcă evenimentele favorite...',
-      position: 'top',
-      visibilityTime: 2000,
-      topOffset: 50,
-    });
+    if (onNavigateToFavorites) {
+      onNavigateToFavorites();
+    } else {
+      Toast.show({
+        type: 'info',
+        text1: '❤️ Favorite',
+        text2: 'Se încarcă evenimentele favorite...',
+        position: 'top',
+        visibilityTime: 2000,
+        topOffset: 50,
+      });
+    }
   };
 
   if (isLoggedIn) {
