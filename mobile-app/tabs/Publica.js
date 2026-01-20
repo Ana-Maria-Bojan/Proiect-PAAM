@@ -10,7 +10,7 @@ const { width } = Dimensions.get('window');
 // Categories excluding 'Fluxul meu'
 const CATEGORIES = ['Festival', 'Concerte', 'Teatru', 'Sport', 'Social', 'Altele'];
 
-export default function Publica() {
+export default function Publica({ userData, onNavigateToAccount }) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
@@ -246,6 +246,46 @@ export default function Publica() {
       {category === item && <Ionicons name="checkmark" size={20} color="#5E35B1" />}
     </TouchableOpacity>
   );
+
+  // Check if user is not logged in and show login prompt
+  if (!userData) {
+    return (
+      <View style={styles.container}>
+        {/* Header with Gradient */}
+        <LinearGradient
+          colors={['#7E57C2', '#EC407A']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.header}
+        >
+          <Text style={styles.headerTitle}>Publică Eveniment</Text>
+        </LinearGradient>
+
+        <View style={styles.loginPromptContainer}>
+          <Ionicons name="lock-closed-outline" size={80} color="#7E57C2" />
+          <Text style={styles.loginPromptTitle}>Autentificare necesară</Text>
+          <Text style={styles.loginPromptDescription}>
+            Pentru a publica evenimente, trebuie să ai un cont. 
+            Conectează-te sau creează un cont nou.
+          </Text>
+          <TouchableOpacity 
+            style={styles.loginPromptButton}
+            onPress={onNavigateToAccount}
+          >
+            <LinearGradient
+              colors={['#7E57C2', '#EC407A']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.loginPromptButtonGradient}
+            >
+              <Ionicons name="person-outline" size={20} color="#FFF" />
+              <Text style={styles.loginPromptButtonText}>Mergi la Cont</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -827,5 +867,48 @@ const styles = StyleSheet.create({
   disabledInput: {
     backgroundColor: '#F9FAFB',
     color: '#9CA3AF',
+  },
+  loginPromptContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 30,
+    backgroundColor: '#F9FAFB',
+  },
+  loginPromptTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginTop: 20,
+    marginBottom: 10,
+  },
+  loginPromptDescription: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 30,
+  },
+  loginPromptButton: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    elevation: 4,
+    shadowColor: '#7E57C2',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  loginPromptButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 30,
+    paddingVertical: 14,
+    gap: 8,
+  },
+  loginPromptButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

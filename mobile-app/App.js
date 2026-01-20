@@ -74,6 +74,7 @@ export default function App() {
     try {
       await AsyncStorage.removeItem('userData');
       setUserData(null);
+      setFavoriteEventIds([]);
     } catch (error) {
       console.error('Eroare la deconectare:', error);
     }
@@ -189,7 +190,7 @@ export default function App() {
       case 'harta':
         return <Harta targetEvent={mapTargetEvent} onClearTarget={() => setMapTargetEvent(null)} />;
       case 'publica':
-        return <Publica />;
+        return <Publica userData={userData} onNavigateToAccount={() => navigateToTab('cont')} />;
       case 'favorite':
         return (
           <Favorite 

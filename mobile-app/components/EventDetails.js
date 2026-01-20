@@ -151,7 +151,7 @@ export default function EventDetails({ eventId, onBack, isFavorite, onToggleFavo
             </View>
 
             <View style={styles.infoCard}>
-              <MaterialIcons name="attach-money" size={24} color="#FF3366" />
+              <FontAwesome5 name="money-bill-wave" size={24} color="#FF3366" />
               <Text style={styles.infoCardTitle}>Preț</Text>
               <Text style={styles.infoCardText}>{event.price}</Text>
             </View>

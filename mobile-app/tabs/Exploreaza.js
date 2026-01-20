@@ -267,7 +267,7 @@ export default function Exploreaza({ userData, onNavigateToAccount, onEventPress
               <Text style={styles.suggestionTitle}>{item.title}</Text>
               <View style={styles.cardRow}>
                 <Ionicons name="calendar-outline" size={14} color="#888" />
-                <Text style={styles.suggestionDate}>{item.date}</Text>
+                <Text style={styles.suggestionDate}>{item.date} {item.month}</Text>
                 <Ionicons name="time-outline" size={14} color="#888" style={{marginLeft: 10}} />
                 <Text style={styles.suggestionDate}>{item.time}</Text>
               </View>
