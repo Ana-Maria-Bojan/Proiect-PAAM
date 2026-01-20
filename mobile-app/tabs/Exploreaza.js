@@ -13,6 +13,7 @@ export default function Exploreaza({ userData, onNavigateToAccount, onEventPress
   const [suggestions, setSuggestions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     fetchEvents();
@@ -218,6 +219,8 @@ export default function Exploreaza({ userData, onNavigateToAccount, onEventPress
           placeholder="Caută eveniment" 
           style={styles.searchInput}
           placeholderTextColor="#999"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
         />
       </View>
 
@@ -235,7 +238,12 @@ export default function Exploreaza({ userData, onNavigateToAccount, onEventPress
 
       {/* Featured Events */}
       <FlatList
-        data={eventsData[activeCategory] || []}
+        data={(eventsData[activeCategory] || []).filter(event => 
+          searchQuery.trim() === '' || 
+          event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          event.location.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          event.category.toLowerCase().includes(searchQuery.toLowerCase())
+        )}
         renderItem={renderEventCard}
         keyExtractor={(item, index) => String(item?._id ?? item?.id ?? index)}
         horizontal
