@@ -3,7 +3,7 @@ import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, Platfo
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
-import { API_URL } from '../config';
+import { apiFetch } from '../config';
 
 const { width } = Dimensions.get('window');
 
@@ -157,7 +157,7 @@ export default function Publica({ userData, onNavigateToAccount }) {
     };
 
     try {
-      const response = await fetch(`${API_URL}/events`, {
+      const response = await apiFetch('/events', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, ScrollView, Image, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { API_URL } from '../config';
+import { apiFetch } from '../config';
 
 export default function Favorite({ userData, favoriteEventIds = [], onEventPress, onToggleFavorite }) {
   const [favoriteEvents, setFavoriteEvents] = useState([]);
@@ -43,7 +43,7 @@ export default function Favorite({ userData, favoriteEventIds = [], onEventPress
 
     try {
       setLoading(true);
-      const response = await fetch(`${API_URL}/favorites/${userData.id}`);
+      const response = await apiFetch(`/favorites/${userData.id}`);
       const data = await response.json();
       setFavoriteEvents(data);
     } catch (error) {

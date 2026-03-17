@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 import { toastConfig } from './components/toastConfig';
-import { API_URL } from './config';
+import { apiFetch } from './config';
 
 // Import tabs
 import Exploreaza from './tabs/Exploreaza';
@@ -54,7 +54,7 @@ export default function App() {
     if (!userData || !userData.id) return;
     
     try {
-      const response = await fetch(`${API_URL}/favorites/${userData.id}`);
+      const response = await apiFetch(`/favorites/${userData.id}`);
       const favorites = await response.json();
       setFavoriteEventIds(favorites.map(event => event._id));
     } catch (error) {
@@ -113,12 +113,12 @@ export default function App() {
     }
 
     const isFavorite = favoriteEventIds.includes(eventId);
-    const endpoint = `${API_URL}/favorites/${userData.id}/${eventId}`;
+    const endpoint = `/favorites/${userData.id}/${eventId}`;
     
     try {
       if (isFavorite) {
         // Remove from favorites
-        await fetch(endpoint, { method: 'DELETE' });
+        await apiFetch(endpoint, { method: 'DELETE' });
         setFavoriteEventIds(favoriteEventIds.filter(id => id !== eventId));
         Toast.show({
           type: 'info',
@@ -130,7 +130,7 @@ export default function App() {
         });
       } else {
         // Add to favorites
-        await fetch(endpoint, { method: 'POST' });
+        await apiFetch(endpoint, { method: 'POST' });
         setFavoriteEventIds([...favoriteEventIds, eventId]);
         Toast.show({
           type: 'success',

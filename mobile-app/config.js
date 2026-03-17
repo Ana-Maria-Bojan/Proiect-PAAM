@@ -1,8 +1,9 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
-const DEFAULT_API_URL = 'https://proiect-paam.onrender.com/api';
-const ANDROID_EMULATOR_API_URL = 'https://proiect-paam.onrender.com/api';
+const DEFAULT_API_URL = 'http://localhost:5000/api';
+const ANDROID_EMULATOR_API_URL = 'http://10.0.2.2:5000/api';
+const RENDER_API_URL = 'https://proiect-paam.onrender.com/api';
 
 const normalizeUrl = (url) => {
   if (!url) return url;
@@ -90,3 +91,40 @@ const getApiUrl = () => {
 };
 
 export const API_URL = normalizeUrl(getApiUrl());
+export const API_FALLBACK_URL = API_URL === RENDER_API_URL ? null : RENDER_API_URL;
+
+const normalizeApiPath = (path) => {
+  if (!path) return '';
+  return path.startsWith('/') ? path : `/${path}`;
+};
+
+const buildApiUrl = (baseUrl, path) => `${normalizeUrl(baseUrl)}${normalizeApiPath(path)}`;
+
+export const apiFetch = async (path, options = {}) => {
+  const targets = [API_URL, API_FALLBACK_URL].filter(Boolean);
+  const method = String(options?.method || 'GET').toUpperCase();
+  let lastError;
+
+  for (let i = 0; i < targets.length; i += 1) {
+    const target = targets[i];
+    const requestUrl = /^https?:\/\//i.test(path) ? path : buildApiUrl(target, path);
+
+    try {
+      const response = await fetch(requestUrl, options);
+
+      // If local API is up but unhealthy (e.g. DB down), allow GET fallback.
+      if (method === 'GET' && response.status >= 500 && i < targets.length - 1) {
+        continue;
+      }
+
+      return response;
+    } catch (error) {
+      lastError = error;
+      if (i === targets.length - 1) {
+        throw error;
+      }
+    }
+  }
+
+  throw lastError || new Error('Network request failed');
+};

@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, ScrollView, Image, TextInput, TouchableOpacity, FlatList, Dimensions, Platform, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { API_URL } from '../config';
+import { apiFetch } from '../config';
 
 const CATEGORIES = ['Fluxul meu', 'Festival', 'Concerte', 'Teatru', 'Sport', 'Social', 'Altele'];
-// API_URL este acum importat din config.js si se seteaza automat
-const EVENTS_URL = `${API_URL}/events`;
+const EVENTS_PATH = '/events';
 
 export default function Exploreaza({ userData, onNavigateToAccount, onEventPress, favoriteEventIds = [], onToggleFavorite }) {
   const [activeCategory, setActiveCategory] = useState('Fluxul meu');
@@ -21,7 +20,7 @@ export default function Exploreaza({ userData, onNavigateToAccount, onEventPress
 
   const fetchEvents = async (retryCount = 0) => {
     try {
-      const response = await fetch(EVENTS_URL, {
+      const response = await apiFetch(EVENTS_PATH, {
         headers: {
           'Accept': 'application/json',
         },

@@ -3,7 +3,7 @@ import { StyleSheet, Text, View, ScrollView, Image, TouchableOpacity, ActivityIn
 import { Ionicons, MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Toast from 'react-native-toast-message';
-import { API_URL } from '../config';
+import { apiFetch } from '../config';
 
 const { width, height } = Dimensions.get('window');
 
@@ -17,7 +17,7 @@ export default function EventDetails({ eventId, onBack, isFavorite, onToggleFavo
 
   const fetchEventDetails = async () => {
     try {
-      const response = await fetch(`${API_URL}/event/${eventId}`);
+      const response = await apiFetch(`/event/${eventId}`);
       if (!response.ok) {
         throw new Error('Nu s-au putut încărca detaliile evenimentului');
       }

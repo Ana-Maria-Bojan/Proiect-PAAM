@@ -3,7 +3,7 @@ import { StyleSheet, Text, View, TouchableOpacity, TextInput, ActivityIndicator,
 import { FontAwesome5, MaterialIcons, Ionicons, Feather, AntDesign } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Toast from 'react-native-toast-message';
-import { API_URL } from '../config';
+import { apiFetch } from '../config';
 
 const { width } = Dimensions.get('window');
 
@@ -64,7 +64,7 @@ export default function Cont({ userData, setUserData, onLogout, onNavigateToFavo
 
     setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/auth/login`, {
+      const response = await apiFetch('/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -122,7 +122,7 @@ export default function Cont({ userData, setUserData, onLogout, onNavigateToFavo
         selectedTags.map(tagId => INTEREST_TAGS.find(t => t.id === tagId)?.category).filter(Boolean)
       )];
 
-      const response = await fetch(`${API_URL}/auth/register`, {
+      const response = await apiFetch('/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, email, password, preferences: uniqueCategories }),
