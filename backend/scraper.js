@@ -1,10 +1,21 @@
 const mongoose = require('mongoose');
 const axios = require('axios');
 const cheerio = require('cheerio');
-require('dotenv').config(); // Încărcăm variabilele din .env
+require('dotenv').config();
 const Event = require('./models/Event');
 
-// Mapare luni RO -> EN (3 litere)
+// Normalizare text românesc - elimină diacritice din ambele forme (ș/ş, ț/ţ etc.)
+const normalizeText = (text) => {
+    if (!text) return '';
+    return text
+        .toLowerCase()
+        .replace(/[ăâ]/g, 'a')
+        .replace(/î/g, 'i')
+        .replace(/[șş]/g, 's')
+        .replace(/[țţ]/g, 't');
+};
+
+// Mapare luni RO -> cod EN 3 litere
 const mapLuni = {
     'ian': 'JAN', 'ianuarie': 'JAN',
     'feb': 'FEB', 'februarie': 'FEB',
@@ -17,387 +28,474 @@ const mapLuni = {
     'sep': 'SEP', 'sept': 'SEP', 'septembrie': 'SEP',
     'oct': 'OCT', 'octombrie': 'OCT',
     'nov': 'NOV', 'noiembrie': 'NOV',
-    'dec': 'DEC', 'decembrie': 'DEC'
+    'dec': 'DEC', 'decembrie': 'DEC',
 };
 
 const getMonthCode = (mon) => {
     if (!mon) return 'JAN';
-    const cleanMon = mon.toLowerCase().replace('.', '');
-    return mapLuni[cleanMon] || 'JAN';
+    return mapLuni[normalizeText(mon.replace(/\./g, ''))] || 'JAN';
 };
 
-// Funcție pentru a determina categoria bazată pe titlu ȘI locație
+// Detectare categorie robustă cu normalizare diacritice
+// Ordinea priorităților contează: Festival > Sport > Teatru > Concerte > Social > Altele
 const ghicesteCategoria = (titlu, locatie) => {
-    const t = titlu.toLowerCase();
-    const l = locatie ? locatie.toLowerCase() : '';
-    
-    // 1. Festivaluri (prioritate mare)
-    if (t.includes('festival') || t.includes('fest ')) return 'Festival';
-    
-    // 2. Sport (verificăm și locații specifice)
-    if (t.includes('sport') || t.includes('alergare') || t.includes('meci') || t.includes('campionat') || t.includes('cupa') || t.includes('fotbal') || t.includes('baschet') ||
-        l.includes('stadion') || l.includes('baza sportiva') || l.includes('sala polivalenta')) {
+    const t = normalizeText(titlu || '');
+    const l = normalizeText(locatie || '');
+
+    // 1. Festival (outdoor, multi-zi, street food etc.)
+    if (/festival|fest\b|carnival|carnaval|street food|food festival|beer fest|wine fest|targul|targ de/.test(t))
+        return 'Festival';
+
+    // 2. Sport (meciuri, competiții, alergări)
+    if (/\bmeci\b|fotbal|baschet|\btenis\b|maraton|alergare|running|campionat|handbal|volei|rugby|triatlon|natatie|fitness|ciclism|turneu sportiv|cupa de tenis|cursa/.test(t) ||
+        /stadion|baza sportiva|sala polivalenta|teren sport|piscina|velodrom/.test(l))
         return 'Sport';
-    }
 
-    // 3. Teatru & Film (verificăm locații culturale)
-    if (t.includes('teatru') || t.includes('spectacol') || t.includes('stand-up') || t.includes('film') || t.includes('piesa') || t.includes('balet') || t.includes('comedie') || t.includes('opera') || t.includes('drama') ||
-        l.includes('teatru') || l.includes('opera') || l.includes('cinema') || l.includes('merlin') || l.includes('national') || l.includes('filarmonica') || l.includes('cultura')) {
+    // 3. Teatru (spectacole, film, balet, operă, stand-up)
+    if (/\bteatru\b|spectacol|stand.?up|piesa\b|balet|opera|drama|musical|impro|cabaret|\bfilm\b|proiectie|cinema|tragedie|comedie de teatru/.test(t) ||
+        /\bteatrul\b|filarmonic|casa de cultura|centrul cultural|merlin|sala national|sala mica|sala mare/.test(l))
         return 'Teatru';
-    }
 
-    // 4. Social (Jocuri, Ateliere, Networking etc.)
-    if (t.includes('remi') || t.includes('rummy') || t.includes('board') || t.includes('joc') || t.includes('quiz') || t.includes('trivia') || t.includes('karaoke') || t.includes('atelier') || t.includes('workshop') || t.includes('degustare') || t.includes('networking') || t.includes('catan') || t.includes('carti') || t.includes('sah') || t.includes('social') || t.includes('meetup')) {
-        return 'Social';
-    }
-    
-    // 5. Concerte (Trebuie să fim specifici acum, nu mai e default)
-    if (t.includes('concert') || t.includes('live') || t.includes('muzica') || t.includes('recital') || t.includes('trupa') || t.includes('formatia') || t.includes('band') || t.includes('simfonic') || t.includes('philharmonic') || t.includes('filarmonica') || t.includes('party') || t.includes('dj ') || t.includes('retro') || t.includes('rock') || t.includes('jazz') || t.includes('piano') ||
-        l.includes('club') || l.includes('pub') || l.includes('discoteca') || l.includes('beraria')) {
+    // 4. Concerte (muzică live, DJ, recitaluri)
+    if (/\bconcert\b|recital|\bband\b|trupa|simfonic|filarmonic|\bdj\b|\brock\b|\bjazz\b|blues|electronic|rap|hip.?hop|\bfolk\b|acoustic|orchestra|\bpiano\b|muzica live|\blive\b|vinil|vinyl|pop music/.test(t) ||
+        /\bclub\b|discoteca|beraria|sala de concerte|amfiteatru/.test(l))
         return 'Concerte';
-    }
 
-    // 6. Altele (Default pentru ce nu recunoaștem)
-    return 'Altele'; 
+    // 5. Social (ateliere, networking, jocuri de societate, expoziții)
+    if (/workshop|atelier|seminar|conferinta|networking|meetup|\bquiz\b|trivia|karaoke|board.?game|joc de masa|\bremi\b|rummy|\bcatan\b|\bsah\b|degustare|expozitie|vernisaj|lansare|targ de carte|job.?fair|targ de cariere|speed dating/.test(t))
+        return 'Social';
+
+    return 'Altele';
 };
 
-// Funcția principală de scraping (Exemplu pentru iabilet - Timisoara)
-// NOTA: Selectorii CSS (.event-list-item, .title, etc.) trebuie actualizați constant dacă site-ul își schimbă designul
+// Escape special chars pentru regex
+const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// Salvare în DB cu deduplicare case-insensitive pe titlu
+// $setOnInsert = inserăm doar dacă NU există deja (nu suprascrie date manuale)
+const saveEvent = async (evt, source) => {
+    const cleanTitle = (evt.title || '').trim();
+    if (cleanTitle.length < 4) return;
+
+    try {
+        await Event.findOneAndUpdate(
+            { title: { $regex: new RegExp('^' + escapeRegex(cleanTitle) + '$', 'i') } },
+            { $setOnInsert: { ...evt, title: cleanTitle } },
+            { upsert: true, new: true }
+        );
+        console.log(`[${source}] ✓ ${cleanTitle} -> ${evt.category}`);
+    } catch (err) {
+        if (err.code !== 11000) {
+            console.error(`[${source}] ✗ "${cleanTitle}": ${err.message}`);
+        }
+    }
+};
+
+const httpConfig = {
+    headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'ro-RO,ro;q=0.9,en-US;q=0.8',
+    },
+    timeout: 15000,
+};
+
+// Extrage prima imagine găsită dintr-un element cheerio (suport lazy loading, background-image, srcset)
+const extractImage = ($, el) => {
+    const imgEl = $(el).find('img').first();
+    let img = imgEl.attr('data-src') || imgEl.attr('data-lazy-src') || imgEl.attr('data-original') || imgEl.attr('src') || '';
+
+    if (!img) {
+        const style = $(el).find('[style*="background-image"]').first().attr('style') || '';
+        const m = style.match(/url\(['"]?(.*?)['"]?\)/);
+        if (m) img = m[1];
+    }
+
+    if (!img) {
+        const srcset = imgEl.attr('srcset') || '';
+        if (srcset) img = srcset.split(',')[0].trim().split(' ')[0];
+    }
+
+    return img || '';
+};
+
+// Parsare dată din text liber (ex: "15 Decembrie", "15 dec 2025")
+const parseDateText = (dateText) => {
+    const m = (dateText || '').match(/(\d{1,2})\s+([a-zA-ZăâîșțĂÂÎȘȚ]+)/);
+    return {
+        zi: m ? m[1].padStart(2, '0') : '01',
+        luna: m ? m[2] : 'Ian',
+    };
+};
+
+// --- 1. IABILET.RO ---
 const scrapeIaBilet = async () => {
     try {
-        console.log('Începem scanarea iabilet.ro pentru Timișoara...');
-        // URL-ul de unde luăm datele
-        const { data } = await axios.get('https://www.iabilet.ro/bilete-in-timisoara/');
+        console.log('\n[IABILET.RO] Scraping...');
+        const { data } = await axios.get('https://www.iabilet.ro/bilete-in-timisoara/', httpConfig);
         const $ = cheerio.load(data);
-
         const evenimenteNoi = [];
 
-        // Iterăm prin elementele HTML care conțin evenimente
-        // Aici trebuie să te uiți în "Inspect Element" pe site-ul respectiv să vezi clasele
-        $('.event-list-item').each((index, element) => {
-            const titlu = $(element).find('.title').text().trim();
-            const dataText = $(element).find('.date').text().trim(); // Ex: "15 Decembrie"
-            const locatie = $(element).find('.venue').text().trim();
-            
-            // Extragere imagine avansată (suport lazy loading)
-            let imgElement = $(element).find('img');
-            let imagine = imgElement.attr('src') || imgElement.attr('data-src') || imgElement.attr('data-original');
-            
-            // Uneori imaginea e în background-image pe un div
-            if (!imagine) {
-                const style = $(element).find('.image').attr('style'); // posibilă clasă .image sau similar
-                if (style && style.includes('background-image')) {
-                     const bgMatch = style.match(/url\(['"]?(.*?)['"]?\)/);
-                     if (bgMatch) imagine = bgMatch[1];
-                }
-            }
+        // Încearcă selectori posibili în ordine (structura site-ului poate varia)
+        const containerSels = [
+            '.event-card', '.event-item', '.event-list-item',
+            '[class*="EventCard"]', '[class*="event-card"]',
+            'article[class*="event"]', '.listing-item', '.item',
+        ];
 
-            const link = 'https://www.iabilet.ro' + $(element).find('a').attr('href');
+        let eventEls = $();
+        for (const sel of containerSels) {
+            const els = $(sel);
+            if (els.length > 1) { eventEls = els; break; }
+        }
 
-            if (titlu && dataText) {
-                // Parsare simplă a datei (Ex: "15 Decembrie")
-                const parts = dataText.split(' ');
-                const zi = parts[0] || '1';
-                const luna = parts[1] || 'Ian';
-                
-                // Construim obiectul exact cum îl cere modelul Event.js
+        // Fallback: link-uri spre pagini de bilet
+        if (eventEls.length === 0) {
+            $('a[href*="/bilet"], a[href*="/concert"], a[href*="/spectacol"]').each((i, el) => {
+                const titlu = $(el).find('h2,h3,h4,.title,strong').first().text().trim() || $(el).attr('title') || '';
+                if (!titlu || titlu.length < 4) return;
+                const dateText = $(el).find('.date,time,[class*="date"]').first().text().trim();
+                const { zi, luna } = parseDateText(dateText);
+                evenimenteNoi.push({
+                    title: titlu,
+                    location: 'Timișoara',
+                    date: zi,
+                    month: getMonthCode(luna),
+                    time: '20:00',
+                    price: 'Vezi detalii',
+                    image: extractImage($, el),
+                    category: ghicesteCategoria(titlu, ''),
+                });
+            });
+        } else {
+            eventEls.each((i, el) => {
+                const titlu = $(el).find('h2,h3,h4,.title,.name,[class*="title"]').first().text().trim();
+                if (!titlu || titlu.length < 4) return;
+                const dateText = $(el).find('.date,time,[class*="date"],[class*="Date"]').first().text().trim();
+                const { zi, luna } = parseDateText(dateText);
+                const locatie = $(el).find('.venue,.location,[class*="venue"],[class*="location"]').first().text().trim();
                 evenimenteNoi.push({
                     title: titlu,
                     location: locatie || 'Timișoara',
                     date: zi,
-                    month: luna.substring(0, 3).toUpperCase(), // Ex: DEC
-                    time: '20:00', // Ora default, greu de extras fără parsing complex
-                    price: 'Vezi detalii', // Preț default
-                    image: imagine || 'https://via.placeholder.com/300',
-                    category: ghicesteCategoria(titlu, locatie)
+                    month: getMonthCode(luna),
+                    time: '20:00',
+                    price: 'Vezi detalii',
+                    image: extractImage($, el),
+                    category: ghicesteCategoria(titlu, locatie),
                 });
-            }
-        });
-
-        console.log(`Am găsit ${evenimenteNoi.length} evenimente potențiale.`);
-
-        // Salvare sau Actualizare în baza de date
-        for (const evt of evenimenteNoi) {
-            try {
-                // Folosim findOneAndUpdate pentru a actualiza categoria chiar dacă evenimentul există deja
-                const result = await Event.findOneAndUpdate(
-                    { title: evt.title },
-                    evt,
-                    { upsert: true, new: true }
-                );
-                console.log(`[IABILET] ${evt.title} -> Categorie: ${result.category}`);
-            } catch (err) {
-                console.error(`Eroare la salvarea evenimentului ${evt.title}:`, err.message);
-            }
+            });
         }
 
-    } catch (error) {
-        console.error('Eroare la scraping iabilet:', error);
+        console.log(`[IABILET.RO] Găsite: ${evenimenteNoi.length} evenimente.`);
+        for (const evt of evenimenteNoi) await saveEvent(evt, 'IABILET');
+    } catch (err) {
+        console.error('[IABILET.RO] Eroare:', err.message);
     }
 };
 
-// --- 2. SCRAPER TIMISORENI.RO ---
+// --- 2. TIMISORENI.RO ---
 const scrapeTimisoreni = async () => {
     try {
-        console.log('Începem scanarea Timisoreni.ro...');
-        const { data } = await axios.get('https://www.timisoreni.ro/evenimente/', { 
-            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36' } 
-        });
+        console.log('\n[TIMISORENI.RO] Scraping...');
+        const { data } = await axios.get('https://www.timisoreni.ro/evenimente/', httpConfig);
         const $ = cheerio.load(data);
         const evenimenteNoi = [];
 
-        // Structura pare a fi un h3 sau h6 cu link, urmat de detalii
-        // Vom itera prin toate link-urile care au '/despre/' in href, care par a fi pagini de eveniment
-        $('a[href*="/despre/"]').each((index, element) => {
-            const link = $(element).attr('href');
-            // Verificăm dacă e link complet sau relativ
-            const fullLink = link.startsWith('http') ? link : `https://www.timisoreni.ro${link}`;
-            
-            const titlu = $(element).text().trim();
-            // Încercăm să găsim containerul părinte sau elementele adiacente pentru dată și locație
-            // Adesea în site-uri vechi, data e într-un tabel sau div imediat următor
-            // Folosim o logică generică de "vecinătate"
-            
-            // Căutăm o imagine în apropiere (în sus sau în containerul părinte)
-            let imgEl = $(element).closest('div').find('img');
-            let imagine = imgEl.attr('src') || imgEl.attr('data-src');
-            
-            if (!imagine) {
-                 // Uneori imaginea e într-un tag img precedent link-ului
-                 imgEl = $(element).parent().prev().find('img');
-                 imagine = imgEl.attr('src') || imgEl.attr('data-src');
-            }
-            
-            // Dacă tot nu găsim, ne uităm în div-ul părinte al link-ului (poate e structură card)
-             if (!imagine) {
-                 imgEl = $(element).parents('div').first().find('img').first();
-                 imagine = imgEl.attr('src') || imgEl.attr('data-src');
-            }
+        // Caută containere de articole/carduri cu suficient conținut
+        const containerSels = ['.event', '.entry', '.post', '.card', 'article', '.list-item', '.item-event'];
+        let eventEls = $();
+        for (const sel of containerSels) {
+            const els = $(sel).filter((i, el) => $(el).text().length > 20 && $(el).find('a').length > 0);
+            if (els.length > 2) { eventEls = els; break; }
+        }
 
-            if (imagine && !imagine.startsWith('http')) {
-                imagine = `https://www.timisoreni.ro${imagine}`;
-            }
+        if (eventEls.length > 0) {
+            eventEls.each((i, el) => {
+                const titlu = $(el).find('h2,h3,h4,.title,.entry-title').first().text().trim() ||
+                              $(el).find('a').first().text().trim();
+                if (!titlu || titlu.length < 4) return;
 
-            // Data și Locația sunt mai greu de extras fara selector exact. 
-            // Vom pune default-uri și ne bazăm pe titlu pentru categorie.
-            // Pentru un scraper robust, am avea nevoie de structura exactă a HTML-ului.
-            
-            if (titlu && titlu.length > 3) {
+                const dateText = $(el).find('.date,.data-eveniment,time,[class*="date"]').first().text().trim();
+                const { zi, luna } = parseDateText(dateText);
+                const locatie = $(el).find('.location,.venue,[class*="location"]').first().text().trim();
+
+                let imagine = extractImage($, el);
+                if (imagine && !imagine.startsWith('http'))
+                    imagine = `https://www.timisoreni.ro${imagine.startsWith('/') ? '' : '/'}${imagine}`;
+
                 evenimenteNoi.push({
                     title: titlu,
-                    location: 'Timișoara (vezi detalii)', // Placeholder, greu de extras fără selector precis
-                    date: '1', 
-                    month: 'JAN', // Default
+                    location: locatie || 'Timișoara',
+                    date: zi,
+                    month: getMonthCode(luna),
                     time: '19:00',
                     price: 'Vezi site',
-                    image: imagine || 'https://via.placeholder.com/300',
-                    category: ghicesteCategoria(titlu, 'timisoara')
+                    image: imagine,
+                    category: ghicesteCategoria(titlu, locatie),
                 });
-            }
-        });
+            });
+        } else {
+            // Fallback: link-uri cu /despre/ (pagini de eveniment individuale)
+            $('a[href*="/despre/"]').each((i, el) => {
+                const titlu = $(el).text().trim();
+                if (!titlu || titlu.length < 5) return;
 
-        console.log(`[TIMISORENI.RO] Am găsit ${evenimenteNoi.length} evenimente (necesită rafinare selectori).`);
-        for (const evt of evenimenteNoi) {
-             // Evităm duplicatele cu titluri foarte scurte sau generice
-             if (evt.title.length > 5) {
-                const result = await Event.findOneAndUpdate({ title: evt.title }, evt, { upsert: true, new: true });
-                console.log(`[TIMISORENI.RO] ${evt.title} -> Categorie: ${result.category}`);
-             }
+                let imagine = extractImage($, $(el).closest('div'));
+                if (imagine && !imagine.startsWith('http'))
+                    imagine = `https://www.timisoreni.ro${imagine.startsWith('/') ? '' : '/'}${imagine}`;
+
+                evenimenteNoi.push({
+                    title: titlu,
+                    location: 'Timișoara',
+                    date: '01',
+                    month: 'JAN',
+                    time: '19:00',
+                    price: 'Vezi site',
+                    image: imagine,
+                    category: ghicesteCategoria(titlu, 'timisoara'),
+                });
+            });
         }
 
-    } catch (error) {
-        console.error('Eroare la scraping Timisoreni.ro:', error.message);
+        console.log(`[TIMISORENI.RO] Găsite: ${evenimenteNoi.length} evenimente.`);
+        for (const evt of evenimenteNoi) await saveEvent(evt, 'TIMISORENI');
+    } catch (err) {
+        console.error('[TIMISORENI.RO] Eroare:', err.message);
     }
 };
 
-// --- 3. SCRAPER UPDATE: ONEVENT.RO ---
+// --- 3. ONEVENT.RO ---
 const scrapeOnEvent = async () => {
     try {
-        console.log('Începem scanarea OnEvent.ro...');
-        const { data } = await axios.get('https://www.onevent.ro/evenimente-in-orasul/timisoara/', {
-             headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36' }
-        });
+        console.log('\n[ONEVENT.RO] Scraping...');
+        const { data } = await axios.get('https://www.onevent.ro/evenimente-in-orasul/timisoara/', httpConfig);
         const $ = cheerio.load(data);
         const evenimenteNoi = [];
 
-        // Pe OnEvent, evenimentele par să fie link-uri care conțin '/evenimente/' si text bogat
-        $('a[href*="/evenimente/"]').each((index, element) => {
-            // Curățăm textul pentru a evita lipirea cuvintelor din tag-uri diferite (ex: <div>10</div><div>Ian</div> -> 10 Ian)
-            // Clonez elementul pentru a nu afecta structura originală dacă ar conta (deși aici e doar un loop)
-            const clonedEl = $(element).clone();
-            
-            // Adăugăm un spațiu după fiecare element copil pentru a separa textul concatenat
-            clonedEl.find('*').each((i, child) => {
-                $(child).after(' '); 
-            });
+        $('a[href*="/evenimente/"]').each((i, el) => {
+            // Adăugăm spațiu după fiecare element copil pentru a separa textul concatenat
+            const clonedEl = $(el).clone();
+            clonedEl.find('*').each((j, child) => $(child).after(' '));
+            const rawText = clonedEl.text().replace(/\s+/g, ' ').trim();
 
-            const rawText = clonedEl.text().replace(/\s+/g, ' ').trim(); 
-
-            // Regex pentru a extrage data: ZiSaptamana ZiNumar Luna (Ex: Vin 09 Ian sau Sâm 10 Ian)
-            // Permitem caractere opționale între ele
-            const dateRegex = /^(Lun|Mar|Mie|Joi|Vin|Sam|Sâm|Dum)[a-z]*\s*(\d{1,2})\s*([a-zA-Zăâîșț]+)/i;
+            // Format: "ZiSapt ZiNumar Luna ..."
+            const dateRegex = /^(Lun|Mar|Mie|Joi|Vin|Sam|Sâm|Dum)[a-z]*\s*(\d{1,2})\s*([a-zA-ZăâîșțĂÂÎȘȚ]+)/i;
             const match = rawText.match(dateRegex);
+            if (!match) return;
 
-            if (match) {
-                // match[1] = Ziua Săpt (Vin)
-                // match[2] = Ziua (09)
-                // match[3] = Luna (Ian)
-                // Curăță strict ziua să fie un număr
-                const zi = match[2].replace(/\D/g, ''); 
-                const lunaRaw = match[3];
-                
-                // Eliminăm partea de dată din text pentru a rămâne cu titlul
-                // Construim stringul match-uit pentru a-l scoate
-                const fullDateMatch = match[0];
-                let restOfText = rawText.replace(fullDateMatch, '').trim();
+            const zi = match[2].replace(/\D/g, '').padStart(2, '0');
+            const lunaRaw = match[3];
 
-                let titlu = restOfText;
-                let locatie = 'Timișoara';
+            let titlu = rawText.replace(match[0], '').trim();
+            let locatie = 'Timișoara';
 
-                // Extragem locația dacă există markerul specific (adesea caracterul  sau "Bilet")
-                // Sau heuristic: Locația e la sfârșit.
-                
-                // Încercare de separare locatie
-                if (titlu.includes('Timisoara')) {
-                    const splitLoc = titlu.split('Timisoara');
-                    titlu = splitLoc[0].trim();
-                     // Curățăm caractere ciudate de la finalul titlului (ex: )
-                    titlu = titlu.replace(/[\uE000-\uF8FF]/g, '').trim();
-                    
-                    locatie = 'Timisoara ' + (splitLoc[1] || '');
-                    // Curățăm categoria din locație dacă apare
-                    const categoriiPosibile = ['Concert', 'Teatru', 'Stand-up', 'Party', 'Festival', 'Sport'];
-                    for (const cat of categoriiPosibile) {
-                        if (locatie.includes(cat)) {
-                             locatie = locatie.split(cat)[0];
-                        }
-                    }
-                }
-
-                // Curățăm titlul de alte date reziduale.
-                
-                // 3. Extragem ora exactă pentru a o folosi ulterior
-                let time = '19:00';
-                const timeMatch = rawText.match(/(\d{2}:\d{2})/);
-                if (timeMatch) {
-                    time = timeMatch[1];
-                }
-
-                // Curățare recursivă/iterativă a începutului de titlu pentru a scoate toate artefactele repetate
-                // ex: "Ian 24) Dum 25 (Ian 25) 02:00 Havana Nights" -> curăță tot până la "Havana Nights"
-                let previousTitlu = '';
-                while (titlu !== previousTitlu) {
-                    previousTitlu = titlu;
-                    
-                    const patterns = [
-                        // Regex Zi Saptamana + Numar (ex: Dum 25)
-                        /^(Lun|Mar|Mie|Joi|Vin|Sam|Sâm|Dum)[a-z]*\.?\s*\d{1,2}\s*/i,
-                        
-                        // Regex Luna + Numar, cu sau fara paranteze (ex: Ian 24, (Ian 25), Feb 16))
-                        /^[\(\[]?(Ian|Feb|Mar|Apr|Mai|Iun|Iul|Aug|Sep|Oct|Nov|Dec|Jan)[a-z]*\.?\s*\d{1,2}[\)\]\.\,\-\:\s]*/i,
-                        
-                        // Regex Ora la inceput (ex: 02:00)
-                        /^\d{2}:\d{2}\s*/,
-                        
-                        // Regex Numere cu paranteza ramase (ex: "9)")
-                        /^\d{1,2}\)\s*/,
-                        
-                        // Garbage punctuation la inceput (spatii, paranteze, cratime)
-                        /^[\s\)\(\-\.\,]+/
-                    ];
-
-                    for (const p of patterns) {
-                        titlu = titlu.replace(p, '').trim();
-                    }
-                }
-
-
-                
-                const link = $(element).attr('href');
-                
-                // Extragere imagine îmbunătățită
-                let imgEl = $(element).find('img');
-                if (imgEl.length === 0) {
-                     // Dacă nu e în link, căutăm în părinți apropiați (div-ul cardului)
-                     imgEl = $(element).closest('div').parent().find('img'); 
-                }
-                
-                let imagine = imgEl.attr('data-src') || imgEl.attr('data-lazy-src') || imgEl.attr('src') || imgEl.attr('srcset');
-                // Adesea imaginile sunt in style background-image
-                if (!imagine) {
-                    const style = $(element).find('*[style*="background-image"]').attr('style');
-                    if (style) {
-                        const bgMatch = style.match(/url\(['"]?(.*?)['"]?\)/);
-                        if (bgMatch) imagine = bgMatch[1];
-                    }
-                }
-
-                // Uneori srcset conține URL-ul + size (ex: "url 300w"). Luăm primul.
-                if (imagine && imagine.includes(' ')) {
-                    imagine = imagine.split(' ')[0];
-                }
-                // Verificăm dacă e cale relativă
-                if (imagine && !imagine.startsWith('http') && !imagine.startsWith('data:')) {
-                     // Presupunem că domeniul e onevent.ro, dar atenție la cdn-uri
-                     imagine = 'https://www.onevent.ro' + (imagine.startsWith('/') ? '' : '/') + imagine;
-                }
-
-                evenimenteNoi.push({
-                    title: titlu.substring(0, 100), // Limităm lungimea
-                    location: locatie.substring(0, 50),
-                    date: zi,
-                    month: getMonthCode(lunaRaw),
-                    time: time,
-                    price: 'Vezi detalii',
-                    image: imagine || 'https://via.placeholder.com/300',
-                    category: ghicesteCategoria(titlu, locatie)
+            // Separăm locația de titlu dacă apare "Timisoara" în text
+            if (titlu.includes('Timisoara')) {
+                const parts = titlu.split('Timisoara');
+                titlu = parts[0].trim();
+                locatie = 'Timișoara ' + (parts[1] || '').trim();
+                // Scoate etichete de categorie reziduale din locație
+                ['Concert', 'Teatru', 'Stand-up', 'Party', 'Festival', 'Sport', 'Altele', 'Social'].forEach(cat => {
+                    if (locatie.includes(cat)) locatie = locatie.split(cat)[0].trim();
                 });
             }
+
+            // Curăță artefacte de dată rămase la începutul titlului
+            let prev = '';
+            while (titlu !== prev) {
+                prev = titlu;
+                [
+                    /^(Lun|Mar|Mie|Joi|Vin|Sam|Sâm|Dum)[a-z]*\.?\s*\d{1,2}\s*/i,
+                    /^[\(\[]?(Ian|Feb|Mar|Apr|Mai|Iun|Iul|Aug|Sep|Oct|Nov|Dec|Jan)[a-z]*\.?\s*\d{1,2}[\)\]\.\,\-\:\s]*/i,
+                    /^\d{2}:\d{2}\s*/,
+                    /^\d{1,2}\)\s*/,
+                    /^[\s\)\(\-\.\,]+/,
+                ].forEach(p => { titlu = titlu.replace(p, '').trim(); });
+            }
+
+            if (!titlu || titlu.length < 4) return;
+
+            let time = '19:00';
+            const timeMatch = rawText.match(/(\d{2}:\d{2})/);
+            if (timeMatch) time = timeMatch[1];
+
+            let imagine = extractImage($, el);
+            if (!imagine) imagine = extractImage($, $(el).closest('div').parent());
+            if (imagine && !imagine.startsWith('http') && !imagine.startsWith('data:'))
+                imagine = 'https://www.onevent.ro' + (imagine.startsWith('/') ? '' : '/') + imagine;
+
+            evenimenteNoi.push({
+                title: titlu.substring(0, 100),
+                location: locatie.substring(0, 100).trim(),
+                date: zi,
+                month: getMonthCode(lunaRaw),
+                time,
+                price: 'Vezi detalii',
+                image: imagine,
+                category: ghicesteCategoria(titlu, locatie),
+            });
         });
 
-        console.log(`[ONEVENT.RO] Am găsit ${evenimenteNoi.length} evenimente.`);
-        for (const evt of evenimenteNoi) {
-             try {
-                const result = await Event.findOneAndUpdate({ title: evt.title }, evt, { upsert: true, new: true });
-                console.log(`[ONEVENT.RO] ${evt.title} -> Categorie: ${result.category}`);
-             } catch (e) {
-                console.error(`Eroare salvare ${evt.title}`, e.message);
-             }
-        }
-
-    } catch (error) {
-        console.error('Eroare la scraping OnEvent.ro:', error.message);
+        console.log(`[ONEVENT.RO] Găsite: ${evenimenteNoi.length} evenimente.`);
+        for (const evt of evenimenteNoi) await saveEvent(evt, 'ONEVENT');
+    } catch (err) {
+        console.error('[ONEVENT.RO] Eroare:', err.message);
     }
 };
 
-// --- 4. SCRAPER EVENTIM.RO ---
-const scrapeEventim = async () => {
-    // Eventim are protecție puternică anti-bot (Cloudflare/Akamai) și randează dinamic.
-    // Un simplu axios/cheerio scraper va primi 403 sau HTML incomplet.
-    // Pentru a demonstra intenția, lăsăm un log. Recomandare: Folosiți API oficial sau Puppeteer/Selenium.
-    console.log('[EVENTIM.RO] Skipping: Necesită browser automation sau API key (protecție anti-bot).');
+// --- 4. AGENDATM.RO ---
+const scrapeAgendaTM = async () => {
+    try {
+        console.log('\n[AGENDATM.RO] Scraping...');
+        const { data } = await axios.get('https://www.agendatm.ro/evenimente', httpConfig);
+        const $ = cheerio.load(data);
+        const evenimenteNoi = [];
+
+        const containerSels = [
+            '.event-card', '.event', '.event-item', 'article',
+            '[class*="event"]', '.card', '.post',
+        ];
+
+        let eventEls = $();
+        for (const sel of containerSels) {
+            const els = $(sel).filter((i, el) => $(el).text().length > 15);
+            if (els.length > 1) { eventEls = els; break; }
+        }
+
+        eventEls.each((i, el) => {
+            const titlu = $(el).find('h2,h3,h4,.title,.name,[class*="title"]').first().text().trim();
+            if (!titlu || titlu.length < 4) return;
+
+            const dateText = $(el).find('.date,time,[class*="date"]').first().text().trim();
+            const { zi, luna } = parseDateText(dateText);
+            const locatie = $(el).find('.venue,.location,[class*="venue"],[class*="location"]').first().text().trim();
+
+            evenimenteNoi.push({
+                title: titlu,
+                location: locatie || 'Timișoara',
+                date: zi,
+                month: getMonthCode(luna),
+                time: '19:00',
+                price: 'Vezi detalii',
+                image: extractImage($, el),
+                category: ghicesteCategoria(titlu, locatie),
+            });
+        });
+
+        console.log(`[AGENDATM.RO] Găsite: ${evenimenteNoi.length} evenimente.`);
+        for (const evt of evenimenteNoi) await saveEvent(evt, 'AGENDATM');
+    } catch (err) {
+        console.error('[AGENDATM.RO] Eroare:', err.message);
+    }
+};
+
+// --- 5. CONCERT.RO ---
+const scrapeConcertRo = async () => {
+    try {
+        console.log('\n[CONCERT.RO] Scraping...');
+        const { data } = await axios.get('https://www.concert.ro/timisoara', httpConfig);
+        const $ = cheerio.load(data);
+        const evenimenteNoi = [];
+
+        const containerSels = [
+            '.event-card', '.concert-item', '.event-item', '.listing',
+            'article', '[class*="event"]', '[class*="concert"]', '.item',
+        ];
+
+        let eventEls = $();
+        for (const sel of containerSels) {
+            const els = $(sel).filter((i, el) => $(el).text().length > 15);
+            if (els.length > 1) { eventEls = els; break; }
+        }
+
+        eventEls.each((i, el) => {
+            const titlu = $(el).find('h2,h3,h4,.title,.name,[class*="title"]').first().text().trim();
+            if (!titlu || titlu.length < 4) return;
+
+            const dateText = $(el).find('.date,time,[class*="date"],[class*="Date"]').first().text().trim();
+            const { zi, luna } = parseDateText(dateText);
+            const locatie = $(el).find('.venue,.location,[class*="venue"],[class*="location"]').first().text().trim();
+
+            evenimenteNoi.push({
+                title: titlu,
+                location: locatie || 'Timișoara',
+                date: zi,
+                month: getMonthCode(luna),
+                time: '20:00',
+                price: 'Vezi detalii',
+                image: extractImage($, el),
+                category: ghicesteCategoria(titlu, locatie),
+            });
+        });
+
+        console.log(`[CONCERT.RO] Găsite: ${evenimenteNoi.length} evenimente.`);
+        for (const evt of evenimenteNoi) await saveEvent(evt, 'CONCERT');
+    } catch (err) {
+        console.error('[CONCERT.RO] Eroare:', err.message);
+    }
+};
+
+// --- 6. BILET.RO ---
+const scrapeBiletRo = async () => {
+    try {
+        console.log('\n[BILET.RO] Scraping...');
+        const { data } = await axios.get('https://www.bilet.ro/timisoara', httpConfig);
+        const $ = cheerio.load(data);
+        const evenimenteNoi = [];
+
+        const containerSels = [
+            '.event-card', '.event-item', '.product-item', '.event',
+            'article', '[class*="event"]', '.item',
+        ];
+
+        let eventEls = $();
+        for (const sel of containerSels) {
+            const els = $(sel).filter((i, el) => $(el).text().length > 15);
+            if (els.length > 1) { eventEls = els; break; }
+        }
+
+        eventEls.each((i, el) => {
+            const titlu = $(el).find('h2,h3,h4,.title,.name,[class*="title"]').first().text().trim();
+            if (!titlu || titlu.length < 4) return;
+
+            const dateText = $(el).find('.date,time,[class*="date"]').first().text().trim();
+            const { zi, luna } = parseDateText(dateText);
+            const locatie = $(el).find('.venue,.location,[class*="venue"]').first().text().trim();
+
+            evenimenteNoi.push({
+                title: titlu,
+                location: locatie || 'Timișoara',
+                date: zi,
+                month: getMonthCode(luna),
+                time: '20:00',
+                price: 'Vezi detalii',
+                image: extractImage($, el),
+                category: ghicesteCategoria(titlu, locatie),
+            });
+        });
+
+        console.log(`[BILET.RO] Găsite: ${evenimenteNoi.length} evenimente.`);
+        for (const evt of evenimenteNoi) await saveEvent(evt, 'BILET');
+    } catch (err) {
+        console.error('[BILET.RO] Eroare:', err.message);
+    }
 };
 
 const run = async () => {
     try {
-        // Conectare la baza de date
         await mongoose.connect(process.env.MONGODB_URI);
-        console.log('Scraper conectat la MongoDB');
+        console.log('✓ Scraper conectat la MongoDB\n');
 
-        // --- CURATARE DB (Opțional: decomentează dacă vrei să ștergi totul înainte) ---
-        // console.log('Ștergem evenimentele vechi pentru a evita duplicatele...');
-        // await Event.deleteMany({});
-        // console.log('Baza de date a fost curățată.');
-        
-        // Rulăm scraping-ul pentru toate sursele
         await scrapeIaBilet();
         await scrapeTimisoreni();
         await scrapeOnEvent();
-        await scrapeEventim();
-        
-        console.log('Scraping finalizat.');
+        await scrapeAgendaTM();
+        await scrapeConcertRo();
+        await scrapeBiletRo();
+
+        console.log('\n✓ Scraping finalizat.');
         await mongoose.connection.close();
-        console.log('Conexiune închisă.');
         process.exit(0);
     } catch (err) {
         console.error('Eroare generală:', err);
