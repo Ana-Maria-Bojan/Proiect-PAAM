@@ -4,13 +4,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { apiFetch } from '../config';
+import TabHeader from '../components/TabHeader';
 
 const { width } = Dimensions.get('window');
 
 // Categories excluding 'Fluxul meu'
 const CATEGORIES = ['Festival', 'Concerte', 'Teatru', 'Sport', 'Social', 'Altele'];
 
-export default function Publica({ userData, onNavigateToAccount }) {
+export default function Publica({ userData, onNavigateToAccount, onBack }) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
@@ -251,6 +252,7 @@ export default function Publica({ userData, onNavigateToAccount }) {
   if (!userData) {
     return (
       <View style={styles.container}>
+        <TabHeader title="Publică" onBack={onBack} />
         {/* Header with Gradient */}
         <LinearGradient
           colors={['#7E57C2', '#EC407A']}
@@ -289,6 +291,7 @@ export default function Publica({ userData, onNavigateToAccount }) {
 
   return (
     <View style={styles.container}>
+      <TabHeader title="Publică" onBack={onBack} />
       {/* Header with Gradient */}
       <LinearGradient
         colors={['#7E57C2', '#EC407A']}
@@ -299,7 +302,7 @@ export default function Publica({ userData, onNavigateToAccount }) {
         <Text style={styles.headerTitle}>Publică Eveniment</Text>
       </LinearGradient>
 
-      <ScrollView 
+      <ScrollView
         style={styles.scrollView} 
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}

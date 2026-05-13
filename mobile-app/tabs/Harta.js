@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, Text, View, ActivityIndicator } from 'react-native';
 import * as Location from 'expo-location';
 import Map from '../components/Map';
+import TabHeader from '../components/TabHeader';
 
-export default function Harta({ targetEvent, onClearTarget }) {
+export default function Harta({ targetEvent, onClearTarget, onBack }) {
   const [location, setLocation] = useState(null);
   const [address, setAddress] = useState('Se localizează...');
   const [errorMsg, setErrorMsg] = useState(null);
@@ -147,8 +148,8 @@ export default function Harta({ targetEvent, onClearTarget }) {
 
   return (
     <View style={styles.container}>
+      <TabHeader title="Hartă" onBack={onBack} />
       <View style={styles.header}>
-        <Text style={styles.title}>Hartă</Text>
         {location && (
           <Text style={styles.subtitle}>📍 {address}</Text>
         )}

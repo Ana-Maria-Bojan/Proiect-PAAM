@@ -4,6 +4,7 @@ import { Ionicons, MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Toast from 'react-native-toast-message';
 import { apiFetch } from '../config';
+import EventImage from './EventImage';
 
 const { width, height } = Dimensions.get('window');
 
@@ -94,7 +95,7 @@ export default function EventDetails({ eventId, onBack, isFavorite, onToggleFavo
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Header Image */}
         <View style={styles.imageContainer}>
-          <Image source={{ uri: event.image }} style={styles.headerImage} />
+          <EventImage event={event} style={styles.headerImage} />
           <LinearGradient
             colors={['transparent', 'rgba(0,0,0,0.8)']}
             style={styles.gradient}

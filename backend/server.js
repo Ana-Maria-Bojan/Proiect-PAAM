@@ -20,16 +20,94 @@ const User = require('./models/User');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
+// Map cod lună -> index numeric (acceptă atât EN cât și RO, capitalizat sau nu)
+const MONTH_INDEX = {
+  jan: 0, ian: 0, ianuarie: 0,
+  feb: 1, februarie: 1,
+  mar: 2, martie: 2,
+  apr: 3, aprilie: 3,
+  may: 4, mai: 4,
+  jun: 5, iun: 5, iunie: 5,
+  jul: 6, iul: 6, iulie: 6,
+  aug: 7, august: 7,
+  sep: 8, sept: 8, septembrie: 8,
+  oct: 9, octombrie: 9,
+  nov: 10, noiembrie: 10,
+  dec: 11, decembrie: 11,
+};
+
+const isEventInFuture = (evt) => {
+  const monthKey = (evt.month || '').toLowerCase().replace(/\./g, '').trim();
+  const mIdx = MONTH_INDEX[monthKey];
+  if (mIdx === undefined) return true; // dacă nu putem parsa luna, includem (safer)
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const day = parseInt(evt.date) || 1;
+  const eventDate = new Date(today.getFullYear(), mIdx, day);
+  return eventDate >= today;
+};
+
 // Routes
 app.get('/', (req, res) => {
   res.send('Backend API is running');
 });
 
-// Get all events
+// Get all events (filtrate – doar cele care urmează)
 app.get('/api/events', async (req, res) => {
   try {
-    const events = await Event.find();
-    res.json(events);
+    const allEvents = await Event.find();
+    const futureEvents = allEvents.filter(isEventInFuture);
+    res.json(futureEvents);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Șterge din DB toate evenimentele cu data în trecut.
+// Idempotent – e safe de apelat de oricâte ori.
+app.delete('/api/events/cleanup', async (req, res) => {
+  try {
+    const allEvents = await Event.find();
+    const pastIds = allEvents.filter(e => !isEventInFuture(e)).map(e => e._id);
+    if (pastIds.length > 0) {
+      await Event.deleteMany({ _id: { $in: pastIds } });
+    }
+    res.json({ deleted: pastIds.length });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Curăță imaginile duplicate / generice. Dacă același URL apare la ≥2 evenimente,
+// păstrăm imaginea doar la primul, iar restul primesc image='' (evenimentele rămân).
+const isGenericImageURL = (url) => {
+  if (!url) return true;
+  const u = url.toLowerCase();
+  return /\blogo\b|\bbanner\b|header|cover[-_]default|cover[-_]image|placeholder|via\.placeholder|no[-_]image|noimage|sprite|favicon|icon[-_]|default[-_]event|default\.(jpg|png|svg|webp)|loading\.gif/.test(u)
+    || u.endsWith('.svg')
+    || /\b(50x50|100x100|150x150|32x32|16x16)\b/.test(u);
+};
+
+app.delete('/api/events/cleanup-images', async (req, res) => {
+  try {
+    const all = await Event.find({ image: { $exists: true, $ne: '' } });
+    const map = {};
+    for (const e of all) {
+      if (!map[e.image]) map[e.image] = [];
+      map[e.image].push(e._id);
+    }
+    let cleared = 0;
+    for (const [img, ids] of Object.entries(map)) {
+      if (isGenericImageURL(img)) {
+        await Event.updateMany({ _id: { $in: ids } }, { $set: { image: '' } });
+        cleared += ids.length;
+      } else if (ids.length > 1) {
+        const toUpdate = ids.slice(1);
+        await Event.updateMany({ _id: { $in: toUpdate } }, { $set: { image: '' } });
+        cleared += toUpdate.length;
+      }
+    }
+    res.json({ cleared });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -111,11 +189,11 @@ app.get('/api/event/:id', async (req, res) => {
   }
 });
 
-// Get events by category
+// Get events by category (filtrate – doar cele care urmează)
 app.get('/api/events/:category', async (req, res) => {
   try {
     const events = await Event.find({ category: req.params.category });
-    res.json(events);
+    res.json(events.filter(isEventInFuture));
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

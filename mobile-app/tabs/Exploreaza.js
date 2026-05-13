@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, ScrollView, Image, TextInput, TouchableOpacity, FlatList, Dimensions, Platform, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { apiFetch } from '../config';
+import EventImage from '../components/EventImage';
 
 const CATEGORIES = ['Fluxul meu', 'Festival', 'Concerte', 'Teatru', 'Sport', 'Social', 'Altele'];
 const EVENTS_PATH = '/events';
@@ -133,10 +134,7 @@ export default function Exploreaza({ userData, onNavigateToAccount, onEventPress
     
     return (
       <View style={styles.card}>
-        <Image 
-          source={{ uri: item.image }} 
-          style={styles.cardImage}
-        />
+        <EventImage event={item} style={styles.cardImage} />
         <View style={styles.dateBadge}>
           <Text style={styles.dateDay}>{item.date}</Text>
           <Text style={styles.dateMonth}>{item.month}</Text>
@@ -156,22 +154,16 @@ export default function Exploreaza({ userData, onNavigateToAccount, onEventPress
         </TouchableOpacity>
 
         <View style={styles.cardContent}>
-          <Text style={styles.cardTitle}>{item.title}</Text>
+          <Text style={styles.cardTitle} numberOfLines={2}>{item.title}</Text>
           <View style={styles.cardRow}>
             <Ionicons name="location-outline" size={14} color="#888" />
-            <Text style={styles.cardLocation}>{item.location}</Text>
+            <Text style={styles.cardLocation} numberOfLines={1}>{item.location}</Text>
           </View>
-          <View style={styles.cardFooter}>
-            <View style={styles.cardRow}>
-              <Ionicons name="time-outline" size={14} color="#888" />
-              <Text style={styles.cardTime}>{item.time}</Text>
-            </View>
-            <View style={styles.priceTag}>
-               <Text style={styles.priceLabel}>Bilet</Text>
-               <Text style={styles.priceValue}>{item.price}</Text>
-            </View>
+          <View style={styles.cardRow}>
+            <Ionicons name="time-outline" size={14} color="#888" />
+            <Text style={styles.cardTime}>{item.time}</Text>
           </View>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.detailsButton}
             onPress={() => onEventPress && onEventPress(item._id || item.id)}
             activeOpacity={0.7}
@@ -269,7 +261,7 @@ export default function Exploreaza({ userData, onNavigateToAccount, onEventPress
             onPress={() => onEventPress && onEventPress(item._id || item.id)}
             activeOpacity={0.7}
           >
-            <Image source={{ uri: item.image }} style={styles.suggestionImage} />
+            <EventImage event={item} style={styles.suggestionImage} />
             <View style={styles.suggestionInfo}>
               <Text style={styles.suggestionTitle}>{item.title}</Text>
               <View style={styles.cardRow}>
@@ -432,36 +424,17 @@ const styles = StyleSheet.create({
   cardRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 6,
   },
   cardLocation: {
     fontSize: 14,
     color: '#888',
     marginLeft: 4,
   },
-  cardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 15,
-  },
   cardTime: {
     fontSize: 14,
     color: '#888',
     marginLeft: 4,
-  },
-  priceTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  priceLabel: {
-    fontSize: 12,
-    color: '#888',
-    marginRight: 4,
-  },
-  priceValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FF7F50',
   },
   detailsButton: {
     flexDirection: 'row',

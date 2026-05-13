@@ -4,6 +4,7 @@ import { FontAwesome5, MaterialIcons, Ionicons, Feather, AntDesign } from '@expo
 import { LinearGradient } from 'expo-linear-gradient';
 import Toast from 'react-native-toast-message';
 import { apiFetch } from '../config';
+import TabHeader from '../components/TabHeader';
 
 const { width } = Dimensions.get('window');
 
@@ -23,7 +24,7 @@ const INTEREST_TAGS = [
   { id: 'tag12', label: 'Vibe', category: 'Festival' }
 ];
 
-export default function Cont({ userData, setUserData, onLogout, onNavigateToFavorites }) {
+export default function Cont({ userData, setUserData, onLogout, onNavigateToFavorites, onBack }) {
   const [isLoggedIn, setIsLoggedIn] = useState(!!userData);
   
   const [isLoginView, setIsLoginView] = useState(true);
@@ -361,6 +362,8 @@ export default function Cont({ userData, setUserData, onLogout, onNavigateToFavo
 
   if (isLoggedIn) {
     return (
+      <View style={{ flex: 1, backgroundColor: '#fff' }}>
+      <TabHeader title="Cont" onBack={onBack} />
       <View style={styles.loggedInContainer}>
         <LinearGradient
           colors={['#2e0249', '#a81858']}
@@ -646,10 +649,13 @@ export default function Cont({ userData, setUserData, onLogout, onNavigateToFavo
           </View>
         </Modal>
       </View>
+      </View>
     );
   }
 
   return (
+    <View style={{ flex: 1 }}>
+    <TabHeader title="Cont" onBack={onBack} />
     <LinearGradient
       colors={['#2e0249', '#5e1059', '#a81858', '#f16a43']}
       start={{ x: 0, y: 0 }}
@@ -797,6 +803,7 @@ export default function Cont({ userData, setUserData, onLogout, onNavigateToFavo
         </ScrollView>
       </KeyboardAvoidingView>
     </LinearGradient>
+    </View>
   );
 }
 

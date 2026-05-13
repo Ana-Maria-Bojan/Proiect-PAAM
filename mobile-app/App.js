@@ -188,25 +188,39 @@ export default function App() {
           />
         );
       case 'harta':
-        return <Harta targetEvent={mapTargetEvent} onClearTarget={() => setMapTargetEvent(null)} />;
+        return (
+          <Harta
+            targetEvent={mapTargetEvent}
+            onClearTarget={() => setMapTargetEvent(null)}
+            onBack={() => navigateToTab('exploreaza')}
+          />
+        );
       case 'publica':
-        return <Publica userData={userData} onNavigateToAccount={() => navigateToTab('cont')} />;
+        return (
+          <Publica
+            userData={userData}
+            onNavigateToAccount={() => navigateToTab('cont')}
+            onBack={() => navigateToTab('exploreaza')}
+          />
+        );
       case 'favorite':
         return (
-          <Favorite 
+          <Favorite
             userData={userData}
             favoriteEventIds={favoriteEventIds}
             onEventPress={handleEventPress}
             onToggleFavorite={toggleFavorite}
+            onBack={() => navigateToTab('exploreaza')}
           />
         );
       case 'cont':
         return (
-          <Cont 
-            userData={userData} 
-            setUserData={setUserData} 
+          <Cont
+            userData={userData}
+            setUserData={setUserData}
             onLogout={handleLogout}
             onNavigateToFavorites={() => navigateToTab('favorite')}
+            onBack={() => navigateToTab('exploreaza')}
           />
         );
       default:

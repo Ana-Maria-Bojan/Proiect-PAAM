@@ -3,8 +3,10 @@ import { StyleSheet, Text, View, ScrollView, Image, TouchableOpacity, ActivityIn
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { apiFetch } from '../config';
+import EventImage from '../components/EventImage';
+import TabHeader from '../components/TabHeader';
 
-export default function Favorite({ userData, favoriteEventIds = [], onEventPress, onToggleFavorite }) {
+export default function Favorite({ userData, favoriteEventIds = [], onEventPress, onToggleFavorite, onBack }) {
   const [favoriteEvents, setFavoriteEvents] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -55,54 +57,63 @@ export default function Favorite({ userData, favoriteEventIds = [], onEventPress
 
   if (!userData) {
     return (
-      <ScrollView style={styles.container}>
-        <Header subtitle="Evenimentele tale preferate" />
-        
-        <View style={styles.content}>
-          <View style={styles.emptyState}>
-            <Ionicons name="person-outline" size={64} color="#C7C7CC" />
-            <Text style={styles.emptyText}>
-              Conectează-te pentru a salva favorite
-            </Text>
-            <Text style={styles.emptySubtext}>
-              Autentifică-te în cont pentru a putea salva evenimente
-            </Text>
+      <View style={styles.container}>
+        <TabHeader title="Favorite" onBack={onBack} />
+        <ScrollView>
+          <Header subtitle="Evenimentele tale preferate" />
+          <View style={styles.content}>
+            <View style={styles.emptyState}>
+              <Ionicons name="person-outline" size={64} color="#C7C7CC" />
+              <Text style={styles.emptyText}>
+                Conectează-te pentru a salva favorite
+              </Text>
+              <Text style={styles.emptySubtext}>
+                Autentifică-te în cont pentru a putea salva evenimente
+              </Text>
+            </View>
           </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </View>
     );
   }
 
   if (loading) {
     return (
-      <View style={[styles.container, styles.centerContent]}>
-        <ActivityIndicator size="large" color="#FF3366" />
+      <View style={styles.container}>
+        <TabHeader title="Favorite" onBack={onBack} />
+        <View style={[{ flex: 1 }, styles.centerContent]}>
+          <ActivityIndicator size="large" color="#FF3366" />
+        </View>
       </View>
     );
   }
 
   if (favoriteEvents.length === 0) {
     return (
-      <ScrollView style={styles.container}>
-        <Header subtitle="Evenimentele tale preferate" />
-        
-        <View style={styles.content}>
-          <View style={styles.emptyState}>
-            <Ionicons name="heart-outline" size={64} color="#C7C7CC" />
-            <Text style={styles.emptyText}>
-              Nu ai adăugat încă niciun favorit
-            </Text>
-            <Text style={styles.emptySubtext}>
-              Explorează și salvează evenimentele tale preferate
-            </Text>
+      <View style={styles.container}>
+        <TabHeader title="Favorite" onBack={onBack} />
+        <ScrollView>
+          <Header subtitle="Evenimentele tale preferate" />
+          <View style={styles.content}>
+            <View style={styles.emptyState}>
+              <Ionicons name="heart-outline" size={64} color="#C7C7CC" />
+              <Text style={styles.emptyText}>
+                Nu ai adăugat încă niciun favorit
+              </Text>
+              <Text style={styles.emptySubtext}>
+                Explorează și salvează evenimentele tale preferate
+              </Text>
+            </View>
           </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </View>
     );
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <View style={styles.container}>
+      <TabHeader title="Favorite" onBack={onBack} />
+      <ScrollView>
       <Header
         subtitle={
           favoriteEvents.length === 1
@@ -114,10 +125,7 @@ export default function Favorite({ userData, favoriteEventIds = [], onEventPress
       <View style={styles.content}>
         {favoriteEvents.map((event, index) => (
           <View key={String(event?._id ?? event?.id ?? index)} style={styles.eventCard}>
-            <Image 
-              source={{ uri: event.image }} 
-              style={styles.eventImage}
-            />
+            <EventImage event={event} style={styles.eventImage} />
             <View style={styles.eventInfo}>
               <View style={styles.eventHeader}>
                 <Text style={styles.eventTitle} numberOfLines={2}>{event.title}</Text>
@@ -167,6 +175,7 @@ export default function Favorite({ userData, favoriteEventIds = [], onEventPress
         <View style={{ height: 100 }} />
       </View>
     </ScrollView>
+    </View>
   );
 }
 
