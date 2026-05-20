@@ -19,6 +19,8 @@ const Event = require('./models/Event');
 const User = require('./models/User');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const axios = require('axios');
+const cheerio = require('cheerio');
 
 // Map cod lună -> index numeric (acceptă atât EN cât și RO, capitalizat sau nu)
 const MONTH_INDEX = {
@@ -108,6 +110,81 @@ app.delete('/api/events/cleanup-images', async (req, res) => {
       }
     }
     res.json({ cleared });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Helper: descarcă pagina și extrage o descriere scurtă
+const fetchEventDescription = async (url) => {
+  if (!url || !/^https?:\/\//i.test(url)) return '';
+  try {
+    const { data } = await axios.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept-Language': 'ro-RO,ro;q=0.9,en-US;q=0.8',
+      },
+      timeout: 8000,
+      maxRedirects: 5,
+    });
+    const $ = cheerio.load(data);
+    const clean = (t) => (t || '').replace(/\s+/g, ' ').replace(/\b(read more|citeste mai mult|vezi mai mult|cumpara bilet|cumpără bilet)\.{0,3}/gi, '').trim();
+    const truncate = (t, max = 400) => {
+      if (!t || t.length <= max) return t;
+      const cut = t.substring(0, max);
+      const sp = cut.lastIndexOf(' ');
+      return (sp > max * 0.7 ? cut.substring(0, sp) : cut) + '...';
+    };
+
+    let desc = clean(
+      $('meta[property="og:description"]').attr('content') ||
+      $('meta[name="twitter:description"]').attr('content') ||
+      $('meta[name="description"]').attr('content') || ''
+    );
+    if (desc.length > 40) return truncate(desc);
+
+    const sels = ['.event-description', '.description', '.entry-content', '.post-content', '.event-content', 'article', 'main', '.tribe-events-single-event-description', '[itemprop="description"]'];
+    for (const sel of sels) {
+      const container = $(sel).first();
+      if (!container.length) continue;
+      const paras = [];
+      container.find('p').each((i, p) => {
+        if (paras.length >= 3) return;
+        const t = clean($(p).text());
+        if (t.length > 30) paras.push(t);
+      });
+      if (paras.length > 0) {
+        const combined = paras.join(' ');
+        if (combined.length > 40) return truncate(combined);
+      }
+    }
+    return '';
+  } catch {
+    return '';
+  }
+};
+
+// Completează descrierile lipsă pentru evenimentele cu website salvat
+app.post('/api/events/enrich-descriptions', async (req, res) => {
+  try {
+    const toEnrich = await Event.find({
+      website: { $exists: true, $ne: '' },
+      $or: [{ description: '' }, { description: { $exists: false } }],
+    });
+
+    let updated = 0;
+    const concurrency = 5;
+    for (let i = 0; i < toEnrich.length; i += concurrency) {
+      const batch = toEnrich.slice(i, i + concurrency);
+      await Promise.all(batch.map(async (evt) => {
+        const d = await fetchEventDescription(evt.website);
+        if (d) {
+          await Event.updateOne({ _id: evt._id }, { $set: { description: d } });
+          updated++;
+        }
+      }));
+    }
+    res.json({ total: toEnrich.length, updated });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

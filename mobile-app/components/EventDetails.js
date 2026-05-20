@@ -55,15 +55,85 @@ export default function EventDetails({ eventId, onBack, isFavorite, onToggleFavo
     }
   };
 
-  const handleBuyTicket = () => {
-    Toast.show({
-      type: 'info',
-      text1: '🎫 Cumpără bilet',
-      text2: 'Redirecționare către pagina de cumpărare...',
-      position: 'top',
-      visibilityTime: 2500,
-      topOffset: 50,
-    });
+  // Normalizează un URL: adaugă https:// dacă lipsește schema, returnează null pentru link-uri invalide
+  const normalizeUrl = (raw) => {
+    if (!raw || typeof raw !== 'string') return null;
+    let url = raw.trim();
+    if (url.length < 4) return null;
+    // Respinge link-uri navigation-only
+    if (url.startsWith('#') || url.startsWith('javascript:') || url === 'http://' || url === 'https://') return null;
+    // Adaugă scheme dacă lipsește
+    if (!/^https?:\/\//i.test(url)) {
+      if (/^\/\//.test(url)) url = 'https:' + url;
+      else if (/^www\./i.test(url)) url = 'https://' + url;
+      else if (/^[\w-]+\.[\w]{2,}/.test(url)) url = 'https://' + url; // pare a fi domeniu
+      else return null;
+    }
+    // Verifică să aibă un host valid (nu doar protocolul)
+    try {
+      const u = new URL(url);
+      if (!u.hostname || u.hostname.length < 3) return null;
+      return u.toString();
+    } catch {
+      return null;
+    }
+  };
+
+  // Verifică dacă un URL duce doar la homepage (fără pagină specifică de eveniment)
+  const isHomepageOnly = (url) => {
+    try {
+      const u = new URL(url);
+      return u.pathname === '/' || u.pathname === '';
+    } catch {
+      return false;
+    }
+  };
+
+  // Construiește un link de căutare Google pentru evenimentul curent.
+  // Folosit ca fallback când nu avem o pagină oficială specifică salvată –
+  // rezultatele Google vor afișa direct site-urile de bilete (iabilet, eventim etc.)
+  const buildSearchUrl = () => {
+    const parts = [event?.title, 'bilete', event?.location || 'Timișoara']
+      .filter(Boolean)
+      .join(' ');
+    return `https://www.google.com/search?q=${encodeURIComponent(parts)}`;
+  };
+
+  const handleBuyTicket = async () => {
+    let url = normalizeUrl(event?.website);
+    let isFallback = false;
+
+    // Fallback la căutare Google dacă nu există un link valid SAU dacă
+    // link-ul duce doar la homepage-ul site-ului (nu la pagina evenimentului).
+    if (!url || isHomepageOnly(url)) {
+      url = buildSearchUrl();
+      isFallback = true;
+    }
+
+    // Pe Android 11+ canOpenURL poate returna false pentru http(s) fără declarații
+    // de package visibility. Apelăm direct openURL și prindem erorile.
+    try {
+      await Linking.openURL(url);
+      if (isFallback) {
+        Toast.show({
+          type: 'info',
+          text1: '🔍 Căutăm biletele pentru tine',
+          text2: 'Te-am dus la rezultatele pentru acest eveniment',
+          position: 'top',
+          visibilityTime: 2500,
+          topOffset: 50,
+        });
+      }
+    } catch (err) {
+      Toast.show({
+        type: 'error',
+        text1: '❌ Nu se poate deschide',
+        text2: 'Verifică conexiunea sau încearcă mai târziu',
+        position: 'top',
+        visibilityTime: 2500,
+        topOffset: 50,
+      });
+    }
   };
 
   if (loading) {
@@ -168,42 +238,6 @@ export default function EventDetails({ eventId, onBack, isFavorite, onToggleFavo
             </View>
           )}
 
-          {/* Organizer Info */}
-          {event.organizer && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Organizator</Text>
-              <View style={styles.organizerCard}>
-                <View style={styles.organizerIcon}>
-                  <FontAwesome5 name="user-tie" size={20} color="#FF3366" />
-                </View>
-                <View style={styles.organizerInfo}>
-                  <Text style={styles.organizerName}>{event.organizer || 'Events Team Timișoara'}</Text>
-                  {event.contactEmail && (
-                    <TouchableOpacity onPress={() => handleContactPress('email', event.contactEmail)}>
-                      <Text style={styles.contactLink}>
-                        <Ionicons name="mail-outline" size={14} /> {event.contactEmail}
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                  {event.contactPhone && (
-                    <TouchableOpacity onPress={() => handleContactPress('phone', event.contactPhone)}>
-                      <Text style={styles.contactLink}>
-                        <Ionicons name="call-outline" size={14} /> {event.contactPhone}
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                  {event.website && (
-                    <TouchableOpacity onPress={() => handleContactPress('website', event.website)}>
-                      <Text style={styles.contactLink}>
-                        <Ionicons name="globe-outline" size={14} /> Website
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              </View>
-            </View>
-          )}
-
           {/* Attendance */}
           {event.maxAttendees > 0 && (
             <View style={styles.section}>
@@ -252,7 +286,7 @@ export default function EventDetails({ eventId, onBack, isFavorite, onToggleFavo
             style={styles.buyButton}
           >
             <Ionicons name="ticket" size={24} color="#fff" />
-            <Text style={styles.buyButtonText}>Cumpără bilet - {event.price}</Text>
+            <Text style={styles.buyButtonText}>Cumpără bilet</Text>
           </LinearGradient>
         </TouchableOpacity>
       </View>

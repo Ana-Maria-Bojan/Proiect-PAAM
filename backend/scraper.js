@@ -3,6 +3,7 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 require('dotenv').config();
 const Event = require('./models/Event');
+const { fetchPageHtml, closeBrowser } = require('./puppeteer-helper');
 
 // ─── UTILITARE ────────────────────────────────────────────────────────────────
 
@@ -173,6 +174,149 @@ const httpConfig = {
     maxRedirects: 5,
 };
 
+// Curăță un text de descriere: spații, newline-uri, "Read more"-uri
+const cleanDescription = (text) => {
+    if (!text) return '';
+    return text
+        .replace(/\s+/g, ' ')
+        .replace(/\b(read more|citeste mai mult|vezi mai mult|continua|continuă|...mai mult|cumpara bilet|cumpără bilet)\.{0,3}/gi, '')
+        .replace(/[ ​]+/g, ' ')
+        .trim();
+};
+
+// Trunchiază un text la o lungime maximă, adăugând "..." la cuvântul cel mai apropiat
+const truncate = (text, max = 400) => {
+    if (!text || text.length <= max) return text;
+    const cut = text.substring(0, max);
+    const lastSpace = cut.lastIndexOf(' ');
+    return (lastSpace > max * 0.7 ? cut.substring(0, lastSpace) : cut) + '...';
+};
+
+// Descarcă pagina unui eveniment și extrage o descriere scurtă
+// Folosește (în ordine): og:description, meta description, JSON-LD, primul paragraf relevant
+const fetchDescription = async (url) => {
+    if (!url || !/^https?:\/\//i.test(url)) return '';
+    try {
+        const { data } = await axios.get(url, { ...httpConfig, timeout: 8000 });
+        const $ = cheerio.load(data);
+
+        // 1. Open Graph (cel mai de încredere – multe site-uri au asta)
+        let desc = $('meta[property="og:description"]').attr('content') ||
+                   $('meta[name="twitter:description"]').attr('content') ||
+                   $('meta[name="description"]').attr('content') || '';
+        desc = cleanDescription(desc);
+        if (desc && desc.length > 40) return truncate(desc);
+
+        // 2. JSON-LD structured data
+        $('script[type="application/ld+json"]').each((i, el) => {
+            if (desc && desc.length > 40) return;
+            try {
+                const json = JSON.parse($(el).html());
+                const items = Array.isArray(json) ? json : [json];
+                for (const item of items) {
+                    if (item.description) {
+                        const d = cleanDescription(String(item.description));
+                        if (d.length > 40) { desc = d; break; }
+                    }
+                }
+            } catch {}
+        });
+        if (desc && desc.length > 40) return truncate(desc);
+
+        // 3. Primul paragraf relevant din conținutul principal
+        const contentSels = [
+            '.event-description', '.description', '.entry-content', '.post-content',
+            '.event-content', '.content', 'article', 'main',
+            '.tribe-events-single-event-description', '[itemprop="description"]'
+        ];
+        for (const sel of contentSels) {
+            const container = $(sel).first();
+            if (!container.length) continue;
+            // Concatenăm primele 2-3 paragrafe ne-goale
+            const paras = [];
+            container.find('p').each((i, p) => {
+                if (paras.length >= 3) return;
+                const t = cleanDescription($(p).text());
+                if (t.length > 30) paras.push(t);
+            });
+            if (paras.length > 0) {
+                const combined = paras.join(' ');
+                if (combined.length > 40) return truncate(combined);
+            }
+        }
+
+        return '';
+    } catch {
+        return '';
+    }
+};
+
+// Pentru toate evenimentele cu website dar fără descriere, fă fetch concurent
+// și completează câmpul description.
+const enrichDescriptions = async () => {
+    const toEnrich = await Event.find({
+        website: { $exists: true, $ne: '' },
+        $or: [{ description: '' }, { description: { $exists: false } }],
+    });
+
+    if (toEnrich.length === 0) {
+        console.log('\n[ENRICH] Nimic de actualizat.\n');
+        return;
+    }
+
+    console.log(`\n[ENRICH] Caut descrieri pentru ${toEnrich.length} evenimente...`);
+
+    const concurrency = 5;
+    let updated = 0;
+    let failed = 0;
+
+    for (let i = 0; i < toEnrich.length; i += concurrency) {
+        const batch = toEnrich.slice(i, i + concurrency);
+        await Promise.all(batch.map(async (evt) => {
+            const desc = await fetchDescription(evt.website);
+            if (desc) {
+                await Event.updateOne({ _id: evt._id }, { $set: { description: desc } });
+                updated++;
+            } else {
+                failed++;
+            }
+        }));
+        // Progres la fiecare 20 evenimente
+        if ((i + concurrency) % 20 === 0 || i + concurrency >= toEnrich.length) {
+            console.log(`  ... ${Math.min(i + concurrency, toEnrich.length)}/${toEnrich.length} (${updated} actualizate)`);
+        }
+    }
+
+    console.log(`[ENRICH] ✓ Actualizate ${updated}, fără descriere ${failed}.\n`);
+};
+
+// Extrage link-ul absolut al unui eveniment dintr-un element cheerio (el = a sau container cu a)
+const extractLink = ($, el, baseUrl = '') => {
+    let href = '';
+    const tag = (el.tagName || el.name || '').toLowerCase();
+    if (tag === 'a') {
+        href = $(el).attr('href') || '';
+    } else {
+        href = $(el).find('a').first().attr('href') || '';
+    }
+    if (!href) return '';
+    href = href.trim();
+
+    // Respinge link-uri non-navigabile
+    if (href.length < 2 || href.startsWith('#') || href.startsWith('javascript:') ||
+        href.startsWith('mailto:') || href.startsWith('tel:')) return '';
+
+    // Protocol-relative → adaugă https:
+    if (href.startsWith('//')) return 'https:' + href;
+    // Deja absolut
+    if (/^https?:\/\//i.test(href)) return href;
+    // Path absolut → prefixează cu baseUrl
+    if (baseUrl && href.startsWith('/')) return baseUrl + href;
+    // Path relativ → prefixează cu baseUrl/
+    if (baseUrl) return baseUrl + '/' + href.replace(/^\.?\//, '');
+    return '';
+};
+
 // Identifică imagini "generice" (logo, banner, placeholder etc.) ce nu trebuie folosite
 const isGenericImage = (url) => {
     if (!url) return true;
@@ -261,7 +405,7 @@ const scrapeIaBilet = async () => {
                 const titlu = $(el).find('h2,h3,h4,.title,strong').first().text().trim() || $(el).attr('title') || '';
                 if (!titlu || titlu.length < 4) return;
                 const { zi, luna, year } = parseDateText($(el).find('.date,time,[class*="date"]').first().text());
-                eventi.push({ title: titlu, location: 'Timișoara', date: zi, month: getMonthCode(luna), year, time: '20:00', price: 'Vezi detalii', image: extractImage($, el), category: ghicesteCategoria(titlu, '') });
+                eventi.push({ title: titlu, location: 'Timișoara', date: zi, month: getMonthCode(luna), year, time: '20:00', price: 'Vezi detalii', image: extractImage($, el), category: ghicesteCategoria(titlu, ''), website: extractLink($, el, 'https://www.iabilet.ro') });
             });
         } else {
             els.each((i, el) => {
@@ -269,7 +413,7 @@ const scrapeIaBilet = async () => {
                 if (!titlu || titlu.length < 4) return;
                 const { zi, luna, year } = parseDateText($(el).find('.date,time,[class*="date"],[class*="Date"]').first().text());
                 const locatie = $(el).find('.venue,.location,[class*="venue"],[class*="location"]').first().text().trim();
-                eventi.push({ title: titlu, location: locatie || 'Timișoara', date: zi, month: getMonthCode(luna), year, time: '20:00', price: 'Vezi detalii', image: extractImage($, el), category: ghicesteCategoria(titlu, locatie) });
+                eventi.push({ title: titlu, location: locatie || 'Timișoara', date: zi, month: getMonthCode(luna), year, time: '20:00', price: 'Vezi detalii', image: extractImage($, el), category: ghicesteCategoria(titlu, locatie), website: extractLink($, el, 'https://www.iabilet.ro') });
             });
         }
 
@@ -301,14 +445,14 @@ const scrapeTimisoreni = async () => {
                 const { zi, luna, year } = parseDateText($(el).find('.date,.data-eveniment,time,[class*="date"]').first().text());
                 const locatie = $(el).find('.location,.venue,[class*="location"]').first().text().trim();
                 let img = extractImage($, el, 'https://www.timisoreni.ro');
-                eventi.push({ title: titlu, location: locatie || 'Timișoara', date: zi, month: getMonthCode(luna), year, time: '19:00', price: 'Vezi site', image: img, category: ghicesteCategoria(titlu, locatie) });
+                eventi.push({ title: titlu, location: locatie || 'Timișoara', date: zi, month: getMonthCode(luna), year, time: '19:00', price: 'Vezi site', image: img, category: ghicesteCategoria(titlu, locatie), website: extractLink($, el, 'https://www.timisoreni.ro') });
             });
         } else {
             $('a[href*="/despre/"]').each((i, el) => {
                 const titlu = $(el).text().trim();
                 if (!titlu || titlu.length < 5) return;
                 let img = extractImage($, $(el).closest('div'), 'https://www.timisoreni.ro');
-                eventi.push({ title: titlu, location: 'Timișoara', date: '01', month: 'JAN', year: null, time: '19:00', price: 'Vezi site', image: img, category: ghicesteCategoria(titlu, 'timisoara') });
+                eventi.push({ title: titlu, location: 'Timișoara', date: '01', month: 'JAN', year: null, time: '19:00', price: 'Vezi site', image: img, category: ghicesteCategoria(titlu, 'timisoara'), website: extractLink($, el, 'https://www.timisoreni.ro') });
             });
         }
 
@@ -363,7 +507,7 @@ const scrapeOnEvent = async () => {
             // Imagine STRICT din link (fără fallback la parent mare)
             const img = extractImage($, el, 'https://www.onevent.ro');
 
-            eventi.push({ title: titlu.substring(0,100), location: locatie.trim().substring(0,100), date: zi, month: getMonthCode(lunaRaw), year: null, time: timeM ? timeM[1] : '19:00', price: 'Vezi detalii', image: img, category: ghicesteCategoria(titlu, locatie) });
+            eventi.push({ title: titlu.substring(0,100), location: locatie.trim().substring(0,100), date: zi, month: getMonthCode(lunaRaw), year: null, time: timeM ? timeM[1] : '19:00', price: 'Vezi detalii', image: img, category: ghicesteCategoria(titlu, locatie), website: extractLink($, el, 'https://www.onevent.ro') });
         });
 
         console.log(`  → ${eventi.length} găsite`);
@@ -412,7 +556,7 @@ const scrapeOpera = async () => {
             let img = $(el).find('img').attr('src') || '';
             if (img && !img.startsWith('http')) img = 'https://www.ort.ro' + (img.startsWith('/') ? '' : '/') + img;
 
-            eventi.push({ title: titlu, location: 'Opera Națională Română, Timișoara', date: zi, month: getMonthCode(luna), year, time: timeM ? timeM[1] : '19:00', price: 'Vezi detalii', image: img, category: 'Teatru' });
+            eventi.push({ title: titlu, location: 'Opera Națională Română, Timișoara', date: zi, month: getMonthCode(luna), year, time: timeM ? timeM[1] : '19:00', price: 'Vezi detalii', image: img, category: 'Teatru', website: extractLink($, el, 'https://www.ort.ro') });
         });
 
         console.log(`  → ${eventi.length} spectacole`);
@@ -454,7 +598,7 @@ const scrapeFilarmonica = async () => {
 
             let img = $(el).find('img').attr('src') || $(el).find('img').attr('data-src') || '';
 
-            eventi.push({ title: titlu.substring(0,100), location: 'Filarmonica Banatul, Timișoara', date: zi, month: getMonthCode(luna), year: null, time, price: 'Vezi detalii', image: img, category: 'Concerte' });
+            eventi.push({ title: titlu.substring(0,100), location: 'Filarmonica Banatul, Timișoara', date: zi, month: getMonthCode(luna), year: null, time, price: 'Vezi detalii', image: img, category: 'Concerte', website: extractLink($, el, 'https://filarmonicabanatul.ro') });
         });
 
         console.log(`  → ${eventi.length} concerte`);
@@ -503,7 +647,7 @@ const scrapeTNTM = async () => {
                 const monthNames = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
                 const monthCode = monthNames[parseInt(dm[2])-1] || 'JAN';
 
-                eventi.push({ title: titlu.substring(0,100), location: 'Teatrul Național Timișoara', date: zi, month: monthCode, year: new Date().getFullYear(), time: dm[3] || '19:00', price: 'Vezi detalii', image: extractImage($, parent), category: 'Teatru' });
+                eventi.push({ title: titlu.substring(0,100), location: 'Teatrul Național Timișoara', date: zi, month: monthCode, year: new Date().getFullYear(), time: dm[3] || '19:00', price: 'Vezi detalii', image: extractImage($, parent), category: 'Teatru', website: extractLink($, el, 'https://www.tntm.ro') });
             });
         } else {
             els.each((i, el) => {
@@ -515,7 +659,7 @@ const scrapeTNTM = async () => {
                 const zi = dm[1].padStart(2,'0');
                 const monthNames = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
                 const monthCode = monthNames[parseInt(dm[2])-1] || 'JAN';
-                eventi.push({ title: titlu.substring(0,100), location: 'Teatrul Național Timișoara', date: zi, month: monthCode, year: new Date().getFullYear(), time: dm[3] || '19:00', price: 'Vezi detalii', image: extractImage($, el), category: 'Teatru' });
+                eventi.push({ title: titlu.substring(0,100), location: 'Teatrul Național Timișoara', date: zi, month: monthCode, year: new Date().getFullYear(), time: dm[3] || '19:00', price: 'Vezi detalii', image: extractImage($, el), category: 'Teatru', website: extractLink($, el, 'https://www.tntm.ro') });
             });
         }
 
@@ -575,7 +719,7 @@ const scrapeZileSiNopti = async () => {
                 const monthCode = monthNames[parseInt(dm[2])-1] || 'JAN';
                 const timeM = text.match(/(\d{2}:\d{2})/);
                 const locatie = $(el).find('.venue,.location,.address,[class*="venue"],[class*="location"]').first().text().trim();
-                eventi.push({ title: titlu.substring(0,100), location: locatie || 'Timișoara', date: zi, month: monthCode, year: null, time: timeM ? timeM[1] : '19:00', price: 'Vezi detalii', image: extractImage($, el), category: ghicesteCategoria(titlu, locatie) });
+                eventi.push({ title: titlu.substring(0,100), location: locatie || 'Timișoara', date: zi, month: monthCode, year: null, time: timeM ? timeM[1] : '19:00', price: 'Vezi detalii', image: extractImage($, el), category: ghicesteCategoria(titlu, locatie), website: extractLink($, el, 'https://zilesinopti.ro') });
             });
         } else {
             // Fallback: link-uri cu titlu + dată DD/MM în container
@@ -592,7 +736,7 @@ const scrapeZileSiNopti = async () => {
                 const monthCode = monthNames[parseInt(dm[2])-1] || 'JAN';
                 const timeM = text.match(/(\d{2}:\d{2})/);
                 seen.add(titlu);
-                eventi.push({ title: titlu.substring(0,100), location: 'Timișoara', date: zi, month: monthCode, year: null, time: timeM ? timeM[1] : '19:00', price: 'Vezi detalii', image: '', category: ghicesteCategoria(titlu, '') });
+                eventi.push({ title: titlu.substring(0,100), location: 'Timișoara', date: zi, month: monthCode, year: null, time: timeM ? timeM[1] : '19:00', price: 'Vezi detalii', image: '', category: ghicesteCategoria(titlu, ''), website: extractLink($, el, 'https://zilesinopti.ro') });
             });
         }
 
@@ -668,6 +812,7 @@ const scrapeCasaCultura = async () => {
                 price: 'Vezi detalii',
                 image: extractImage($, parent, 'https://www.casadeculturatm.ro'),
                 category: ghicesteCategoria(titlu, locatie),
+                website: extractLink($, el, 'https://www.casadeculturatm.ro'),
             });
         });
 
@@ -712,6 +857,7 @@ const scrapeRadioTimisoara = async () => {
                     price: 'Vezi detalii',
                     image: extractImage($, parent, 'https://www.radiotimisoara.ro'),
                     category: ghicesteCategoria(titlu, ''),
+                    website: extractLink($, el, 'https://www.radiotimisoara.ro'),
                 });
             });
         } else {
@@ -732,6 +878,7 @@ const scrapeRadioTimisoara = async () => {
                     price: 'Vezi detalii',
                     image: extractImage($, el, 'https://www.radiotimisoara.ro'),
                     category: ghicesteCategoria(titlu, ''),
+                    website: extractLink($, el, 'https://www.radiotimisoara.ro'),
                 });
             });
         }
@@ -786,6 +933,7 @@ const scrapeTicketstore = async () => {
                     price: 'Vezi detalii',
                     image: extractImage($, parent, 'https://ticketstore.ro'),
                     category: ghicesteCategoria(titlu, locatie),
+                    website: extractLink($, el, 'https://ticketstore.ro'),
                 });
             });
         } else {
@@ -807,6 +955,7 @@ const scrapeTicketstore = async () => {
                     price: 'Vezi detalii',
                     image: extractImage($, el, 'https://ticketstore.ro'),
                     category: ghicesteCategoria(titlu, locatie),
+                    website: extractLink($, el, 'https://ticketstore.ro'),
                 });
             });
         }
@@ -872,6 +1021,7 @@ const scrapeSCM = async () => {
                         price: 'Vezi detalii',
                         image: extractImage($, el, 'https://scmtimisoara.ro'),
                         category: sport, // Forțat Sport
+                        website: extractLink($, el, 'https://scmtimisoara.ro') || url,
                     });
                 });
 
@@ -942,6 +1092,7 @@ const scrapeAllEvents = async () => {
                     time, price: 'Vezi detalii',
                     image: extractImage($, parent),
                     category: ghicesteCategoria(titlu, locatie),
+                    website: extractLink($, el, 'https://allevents.in'),
                 });
             });
         } else {
@@ -963,6 +1114,7 @@ const scrapeAllEvents = async () => {
                     price: 'Vezi detalii',
                     image: extractImage($, el),
                     category: ghicesteCategoria(titlu, locatie),
+                    website: extractLink($, el, 'https://allevents.in'),
                 });
             });
         }
@@ -979,6 +1131,419 @@ const scrapeAllEvents = async () => {
     } catch (err) { console.error('[ALLEVENTS] Eroare:', err.message); }
 };
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// SCRAPERE PUPPETEER (site-uri protejate Cloudflare sau SPA-uri JavaScript)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Wrapper: încearcă să încarce pagina cu Puppeteer + Stealth.
+// Returnează cheerio loader sau null la eșec (fără să oprească restul scraperelor).
+const loadWithPuppeteer = async (url, opts = {}) => {
+    try {
+        const html = await fetchPageHtml(url, opts);
+        if (!html || html.length < 500) return null;
+        return cheerio.load(html);
+    } catch (err) {
+        console.log(`  [puppeteer] ${url}: ${err.message.substring(0, 80)}`);
+        return null;
+    }
+};
+
+// ─── SCRAPER 13: EVENTIM.RO (Cloudflare) ─────────────────────────────────────
+// Cel mai mare agregator de bilete din România. Cloudflare + SPA React.
+// Strategie: 1) extragem teasers (titluri + URL) din pagina orașului; 2) fetch
+// pagina fiecărui eveniment pentru a obține data + locația exactă din meta tags.
+
+const scrapeEventim = async () => {
+    try {
+        console.log('[EVENTIM.RO] Scraping...');
+        const $ = await loadWithPuppeteer('https://www.eventim.ro/ro/bilete/timisoara-1822/city.html', {
+            waitSelector: 'a[data-teaser-id]',
+            waitMs: 5000,
+            scroll: true,
+        });
+        if (!$) { console.log('[EVENTIM.RO] Inaccesibil.'); return; }
+
+        // 1. Adunăm toate teaser-urile unice (cardurile de evenimente promovate în Timișoara)
+        const teasers = [];
+        const seen = new Set();
+        $('a[data-teaser-id], a.js-track-product').each((i, el) => {
+            const titlu = ($(el).attr('data-teaser-name') || $(el).attr('title') || '').trim();
+            const href = $(el).attr('href') || '';
+            if (!titlu || titlu.length < 4 || !href || seen.has(href)) return;
+            // Doar pagini de evenimente reale (skip artist/categorii)
+            if (!/^\/(eventseries|event|tickets)\//i.test(href)) return;
+            seen.add(href);
+
+            let img = $(el).find('img').first().attr('src') || '';
+            if (img && !img.startsWith('http')) img = 'https://www.eventim.ro' + img;
+
+            teasers.push({
+                title: titlu,
+                href: href.startsWith('http') ? href : 'https://www.eventim.ro' + href,
+                image: img,
+            });
+        });
+        console.log(`  → ${teasers.length} teasers găsiți, fetch detalii (max 30)...`);
+
+        // 2. Fetch pe pagina fiecărui eveniment (cu Puppeteer, secvențial — Cloudflare
+        //    blochează axios și pe paginile individuale). Limităm la 20 pentru viteză.
+        const top = teasers.slice(0, 20);
+        const eventi = [];
+
+        for (const t of top) {
+            try {
+                const html = await fetchPageHtml(t.href, { waitMs: 3000 });
+                if (!html) continue;
+                const $$ = cheerio.load(html);
+                const bodyText = $$('body').text().replace(/\s+/g, ' ');
+                const ogDesc = $$('meta[property="og:description"]').attr('content') || '';
+                const fullText = bodyText + ' ' + ogDesc;
+
+                    // Format date: "13 Mai 2026", "13.05.2026", "Mai 13, 2026"
+                    let zi, luna, year;
+                    const dm1 = fullText.match(/(\d{1,2})\s+(ianuarie|februarie|martie|aprilie|mai|iunie|iulie|august|septembrie|octombrie|noiembrie|decembrie|ian|feb|mar|apr|iun|iul|aug|sep|oct|nov|dec)\.?\s+(\d{4})/i);
+                    const dm2 = fullText.match(/(\d{1,2})[\.\/](\d{1,2})[\.\/](\d{4})/);
+                    if (dm1) {
+                        zi = dm1[1].padStart(2,'0'); luna = dm1[2]; year = parseInt(dm1[3]);
+                    } else if (dm2) {
+                        zi = dm2[1].padStart(2,'0');
+                        const monthNames = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+                        luna = monthNames[parseInt(dm2[2])-1] || 'JAN';
+                        year = parseInt(dm2[3]);
+                    } else return;
+
+                    const timeM = fullText.match(/(\d{2}:\d{2})/);
+                    // Locația: caută venue specific din Timișoara
+                    const locM = fullText.match(/(?:Sala|Stadion|Centrul|Casa|Teatrul|Filarmonica|Berăria|Beraria|Arena|Iulius|Cinema|Park|Parcul)\s+[A-ZĂÂÎȘȚa-zăâîșț][^\.,\|]{2,60}/);
+                    const locatie = locM ? locM[0].trim() : 'Timișoara';
+
+                    const monthCode = dm1 ? getMonthCode(luna) : luna;
+                eventi.push({
+                    title: t.title.substring(0, 100),
+                    location: locatie.substring(0, 100),
+                    date: zi, month: monthCode, year,
+                    time: timeM ? timeM[1] : '20:00',
+                    price: 'Vezi pe Eventim',
+                    image: t.image,
+                    category: ghicesteCategoria(t.title, locatie),
+                    website: t.href,
+                });
+            } catch { /* fetch eșuat — sărim peste */ }
+        }
+
+        console.log(`  → ${eventi.length} evenimente cu date complete`);
+        for (const e of eventi) await saveEvent(e, 'EVENTIM');
+    } catch (err) { console.error('[EVENTIM.RO] Eroare:', err.message); }
+};
+
+// ─── SCRAPER 14: BILETE.RO (Cloudflare) ──────────────────────────────────────
+
+const scrapeBilete = async () => {
+    try {
+        console.log('[BILETE.RO] Scraping...');
+        const urls = [
+            'https://www.bilete.ro/cauta/?l=timisoara',
+            'https://www.bilete.ro/categorii/timisoara/',
+        ];
+        let $;
+        for (const url of urls) {
+            $ = await loadWithPuppeteer(url, {
+                waitSelector: '.event, [class*="event"], a[href*="/eveniment/"], .product',
+                waitMs: 4000,
+                scroll: true,
+            });
+            if ($ && ($('a[href*="/eveniment/"]').length > 0 || $('[class*="event"]').length > 2)) break;
+        }
+        if (!$) { console.log('[BILETE.RO] Inaccesibil.'); return; }
+
+        const eventi = [];
+        const seen = new Set();
+
+        const collect = (el) => {
+            const titlu = ($(el).find('h2,h3,h4,.title,.name,[class*="title"]').first().text().trim() ||
+                          $(el).attr('title') || '').replace(/\s+/g, ' ');
+            if (!titlu || titlu.length < 6 || seen.has(titlu)) return;
+
+            const parent = $(el).closest('article,div,li,section').first();
+            const container = parent.length ? parent : $(el);
+            const text = container.text().replace(/\s+/g, ' ');
+
+            const dm = text.match(/(\d{1,2})\s+(ianuarie|februarie|martie|aprilie|mai|iunie|iulie|august|septembrie|octombrie|noiembrie|decembrie|ian|feb|mar|apr|iun|iul|aug|sep|oct|nov|dec)\b\.?\s*(\d{4})?/i);
+            if (!dm) return;
+
+            const timeM = text.match(/(\d{2}:\d{2})/);
+            const locatie = container.find('.venue,.location,[class*="venue"],[class*="location"]').first().text().trim() || 'Timișoara';
+
+            seen.add(titlu);
+            eventi.push({
+                title: titlu.substring(0, 100),
+                location: locatie.substring(0, 100),
+                date: dm[1].padStart(2, '0'),
+                month: getMonthCode(dm[2]),
+                year: dm[3] ? parseInt(dm[3]) : null,
+                time: timeM ? timeM[1] : '19:00',
+                price: 'Vezi pe Bilete.ro',
+                image: extractImage($, container, 'https://www.bilete.ro'),
+                category: ghicesteCategoria(titlu, locatie),
+                website: extractLink($, el, 'https://www.bilete.ro'),
+            });
+        };
+
+        $('a[href*="/eveniment/"]').each((i, el) => collect(el));
+        if (eventi.length === 0) {
+            $('[class*="event"], .product, article').each((i, el) => collect(el));
+        }
+
+        console.log(`  → ${eventi.length} evenimente`);
+        for (const e of eventi) await saveEvent(e, 'BILETE');
+    } catch (err) { console.error('[BILETE.RO] Eroare:', err.message); }
+};
+
+// ─── SCRAPER 15: MYSTAGE.RO (SPA JavaScript) ─────────────────────────────────
+// Format link: <a href="/spectacole/[slug]/date/[id]">
+// Text intern: "[Tag opțional]TitluZi-săptămână, DD Luna - ora HH:MM[Locație, Oraș]"
+// Notă: MyStage are evenimente din toată România — păstrăm toate, locația rămâne corectă.
+
+const scrapeMyStage = async () => {
+    try {
+        console.log('[MYSTAGE] Scraping...');
+        const urls = [
+            'https://www.mystage.ro/category/concert-6',
+            'https://www.mystage.ro/',
+        ];
+        const eventi = [];
+        const seen = new Set();
+
+        for (const url of urls) {
+            const $ = await loadWithPuppeteer(url, {
+                waitSelector: 'a[href*="/spectacole/"]',
+                waitMs: 3500,
+                scroll: true,
+            });
+            if (!$) continue;
+
+            $('a[href*="/spectacole/"]').each((i, el) => {
+                const href = $(el).attr('href') || '';
+                if (!href || seen.has(href)) return;
+                const text = $(el).text().replace(/\s+/g, ' ').trim();
+                if (text.length < 20) return;
+
+                // Pattern principal: "DD Luna - ora HH:MM"
+                const dateTimeRx = /(\d{1,2})\s+(Ianuarie|Februarie|Martie|Aprilie|Mai|Iunie|Iulie|August|Septembrie|Octombrie|Noiembrie|Decembrie|Ian|Feb|Mar|Apr|Iun|Iul|Aug|Sep|Oct|Nov|Dec)\s*-?\s*ora\s+(\d{2}:\d{2})/i;
+                const dtM = text.match(dateTimeRx);
+                if (!dtM) return;
+
+                // Titlul = text înainte de potrivire (eventual cu zi-săptămână)
+                let titlu = text.substring(0, text.indexOf(dtM[0])).trim();
+                // Eliminăm ziua săptămânii de la sfârșit (dacă există)
+                titlu = titlu.replace(/(Luni|Marți|Marti|Miercuri|Joi|Vineri|Sâmbătă|Sambata|Duminică|Duminica),?\s*$/i, '').trim();
+                // Curățăm tag-uri promo de la început
+                titlu = titlu.replace(/^(Bine cotate|Sub reflector|Ultimele\s+\d+\s+bilete|Recomandate|Top vânzări|Sold out)/i, '').trim();
+                if (!titlu || titlu.length < 4) return;
+
+                // Locația = text după ora HH:MM
+                const afterIdx = text.indexOf(dtM[0]) + dtM[0].length;
+                const afterTime = text.substring(afterIdx).trim();
+                let locatie = afterTime
+                    .replace(/\d+(\.\d+)?\s*(Vezi locurile|Cumpără|Cumpara).*$/i, '')
+                    .replace(/(Vezi locurile|Cumpără|Cumpara|Sold out).*$/i, '')
+                    .trim();
+                if (locatie.length < 3 || locatie.length > 100) locatie = 'România';
+
+                seen.add(href);
+                eventi.push({
+                    title: titlu.substring(0, 100),
+                    location: locatie.substring(0, 100),
+                    date: dtM[1].padStart(2, '0'),
+                    month: getMonthCode(dtM[2]),
+                    year: null,
+                    time: dtM[3],
+                    price: 'Vezi pe MyStage',
+                    image: $(el).find('img').first().attr('src') || '',
+                    category: ghicesteCategoria(titlu, locatie),
+                    website: href.startsWith('http') ? href : 'https://www.mystage.ro' + href,
+                });
+            });
+        }
+
+        console.log(`  → ${eventi.length} evenimente`);
+        for (const e of eventi) await saveEvent(e, 'MYSTAGE');
+    } catch (err) { console.error('[MYSTAGE] Eroare:', err.message); }
+};
+
+// ─── SCRAPER 16: CINEMACITY.RO (SPA pentru programul de cinema) ──────────────
+
+const scrapeCinemaCity = async () => {
+    try {
+        console.log('[CINEMACITY] Scraping...');
+        // Cinema City Iulius Mall Timișoara
+        const $ = await loadWithPuppeteer('https://www.cinemacity.ro/cinemas/iulius-mall-timisoara/008', {
+            waitSelector: '[class*="movie"], [class*="Movie"], .qb-movie, a[href*="/movie"]',
+            waitMs: 5000,
+            scroll: true,
+        });
+        if (!$) { console.log('[CINEMACITY] Inaccesibil.'); return; }
+
+        const eventi = [];
+        const seen = new Set();
+
+        // Cinema City prezintă filme pe mai multe zile. Luăm filmele unice și folosim ziua curentă.
+        $('a[href*="/movie"], [class*="movie"]').each((i, el) => {
+            const titlu = ($(el).find('h2,h3,h4,[class*="title"]').first().text().trim() ||
+                          $(el).attr('title') || $(el).text().trim()).replace(/\s+/g, ' ');
+            if (!titlu || titlu.length < 3 || titlu.length > 80 || seen.has(titlu)) return;
+            if (/program|cinema|bilet|rezerv|ora\s+\d/i.test(titlu)) return;
+
+            seen.add(titlu);
+            const today = new Date();
+            const monthNames = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+
+            eventi.push({
+                title: `Film: ${titlu}`.substring(0, 100),
+                location: 'Cinema City Iulius Mall, Timișoara',
+                date: String(today.getDate()).padStart(2, '0'),
+                month: monthNames[today.getMonth()],
+                year: today.getFullYear(),
+                time: '19:00',
+                price: 'Bilet cinema',
+                image: extractImage($, $(el).closest('div,article,li'), 'https://www.cinemacity.ro'),
+                category: 'Teatru', // categoria existentă cea mai potrivită pentru filme
+                website: extractLink($, el, 'https://www.cinemacity.ro'),
+            });
+        });
+
+        // Limităm la primele 30 filme pentru a nu inunda DB-ul
+        const limited = eventi.slice(0, 30);
+        console.log(`  → ${limited.length} filme`);
+        for (const e of limited) await saveEvent(e, 'CINEMACITY');
+    } catch (err) { console.error('[CINEMACITY] Eroare:', err.message); }
+};
+
+// ─── SCRAPER 17: HAPPENINGNEXT.COM (Aggregator internațional) ────────────────
+// Structură reală: <div class="event-card card"> ce conține:
+//   <a title="TITLU" href="https://happeningnext.com/event/...">
+//   Text intern: "TITLU LOCAȚIE 29 May 2026 CATEGORIE"
+
+const scrapeHappeningNext = async () => {
+    try {
+        console.log('[HAPPENINGNEXT] Scraping...');
+        const $ = await loadWithPuppeteer('https://happeningnext.com/timisoara', {
+            waitSelector: '.event-card',
+            waitMs: 4000,
+            scroll: true,
+        });
+        if (!$) { console.log('[HAPPENINGNEXT] Inaccesibil.'); return; }
+
+        const eventi = [];
+        const seen = new Set();
+
+        $('.event-card').each((i, el) => {
+            const link = $(el).find('a[href*="/event/"]').first();
+            const titlu = (link.attr('title') || link.text().trim()).replace(/\s+/g, ' ');
+            const href = link.attr('href') || '';
+            if (!titlu || titlu.length < 4 || !href || seen.has(href)) return;
+
+            const text = $(el).text().replace(/\s+/g, ' ').trim();
+            // Format: "TITLU LOCATION DD MMM YYYY CATEGORY"
+            const dmEN = text.match(/(\d{1,2})\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{4})/i);
+            if (!dmEN) return;
+
+            // Locația = text între titlu și dată (curățat)
+            const titleIdx = text.indexOf(titlu);
+            const dateIdx = text.indexOf(dmEN[0]);
+            let locatie = 'Timișoara';
+            if (titleIdx >= 0 && dateIdx > titleIdx) {
+                const between = text.substring(titleIdx + titlu.length, dateIdx).trim();
+                if (between.length >= 3 && between.length <= 80) {
+                    locatie = between;
+                }
+            }
+
+            // Imagine: din [data-background-image] sau <img src>
+            let img = link.attr('data-background-image') ||
+                      $(el).find('[data-background-image]').first().attr('data-background-image') ||
+                      $(el).find('img').first().attr('src') || '';
+            // Curățăm URL-uri proxy allevents (sunt valide, dar pot fi mari)
+            if (img && !img.startsWith('http')) img = 'https://happeningnext.com' + img;
+
+            seen.add(href);
+            eventi.push({
+                title: titlu.substring(0, 100),
+                location: locatie.substring(0, 100),
+                date: dmEN[1].padStart(2, '0'),
+                month: getMonthCode(dmEN[2]),
+                year: parseInt(dmEN[3]),
+                time: '19:00',
+                price: 'Vezi detalii',
+                image: img,
+                category: ghicesteCategoria(titlu, locatie),
+                website: href.startsWith('http') ? href : 'https://happeningnext.com' + href,
+            });
+        });
+
+        console.log(`  → ${eventi.length} evenimente`);
+        for (const e of eventi) await saveEvent(e, 'HAPPENINGNEXT');
+    } catch (err) { console.error('[HAPPENINGNEXT] Eroare:', err.message); }
+};
+
+// ─── SCRAPER 18: EVENTBRITE.COM (SPA + protecții anti-bot) ───────────────────
+
+const scrapeEventbrite = async () => {
+    try {
+        console.log('[EVENTBRITE] Scraping...');
+        const $ = await loadWithPuppeteer('https://www.eventbrite.com/d/romania--timisoara/all-events/', {
+            waitSelector: 'a[href*="/e/"], [data-testid*="event"], [class*="event-card"]',
+            waitMs: 5000,
+            scroll: true,
+        });
+        if (!$) { console.log('[EVENTBRITE] Inaccesibil.'); return; }
+
+        const eventi = [];
+        const seen = new Set();
+
+        $('a[href*="/e/"]').each((i, el) => {
+            const titlu = ($(el).find('h2,h3,h4,[class*="title"]').first().text().trim() ||
+                          $(el).attr('aria-label') || '').replace(/\s+/g, ' ');
+            if (!titlu || titlu.length < 6 || seen.has(titlu)) return;
+
+            const parent = $(el).closest('article,section,div,li');
+            const text = parent.text().replace(/\s+/g, ' ');
+
+            // Format EN: "Sat, May 30, 7:00 PM" / "May 30"
+            const dmEN = text.match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2})/i);
+            if (!dmEN) return;
+
+            const timeM = text.match(/(\d{1,2}):(\d{2})\s*(pm|am|PM|AM)?/);
+            let time = '19:00';
+            if (timeM) {
+                let h = parseInt(timeM[1]);
+                if (timeM[3] && /pm/i.test(timeM[3]) && h < 12) h += 12;
+                if (timeM[3] && /am/i.test(timeM[3]) && h === 12) h = 0;
+                time = String(h).padStart(2,'0') + ':' + timeM[2];
+            }
+
+            const locM = text.match(/(?:•|·|,)\s*([^•·,]{3,50}?(?:Timi[șs]oara|Timisoara)[^•·,]*)/i);
+            const locatie = locM ? locM[1].trim() : 'Timișoara';
+
+            seen.add(titlu);
+            eventi.push({
+                title: titlu.substring(0, 100),
+                location: locatie.substring(0, 100),
+                date: dmEN[2].padStart(2,'0'),
+                month: getMonthCode(dmEN[1]),
+                year: null,
+                time, price: 'Vezi pe Eventbrite',
+                image: extractImage($, parent, 'https://www.eventbrite.com'),
+                category: ghicesteCategoria(titlu, locatie),
+                website: extractLink($, el, 'https://www.eventbrite.com'),
+            });
+        });
+
+        console.log(`  → ${eventi.length} evenimente`);
+        for (const e of eventi) await saveEvent(e, 'EVENTBRITE');
+    } catch (err) { console.error('[EVENTBRITE] Eroare:', err.message); }
+};
+
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
 
 const run = async () => {
@@ -991,6 +1556,7 @@ const run = async () => {
         await cleanPastEvents();
         await cleanDuplicateImages();
 
+        // Scrapere axios + cheerio (rapide, pentru site-uri publice fără protecții)
         await scrapeIaBilet();
         await scrapeTimisoreni();
         await scrapeOnEvent();
@@ -1004,11 +1570,28 @@ const run = async () => {
         await scrapeSCM();
         await scrapeAllEvents();
 
+        // Scrapere Puppeteer + Stealth (pentru site-uri Cloudflare / SPA-uri JavaScript)
+        console.log('\n─── Pornesc scraperele Puppeteer ───\n');
+        await scrapeEventim();
+        await scrapeBilete();
+        await scrapeMyStage();
+        await scrapeCinemaCity();
+        await scrapeHappeningNext();
+        await scrapeEventbrite();
+
+        // Închidem browser-ul Puppeteer (eliberare memorie)
+        await closeBrowser();
+        console.log('\n✓ Browser Puppeteer închis.');
+
+        // Pas final: completează descrierile lipsă fetchând pagina fiecărui eveniment
+        await enrichDescriptions();
+
         console.log('\n✓ Scraping finalizat.');
         await mongoose.connection.close();
         process.exit(0);
     } catch (err) {
         console.error('Eroare generală:', err);
+        try { await closeBrowser(); } catch {}
         process.exit(1);
     }
 };
