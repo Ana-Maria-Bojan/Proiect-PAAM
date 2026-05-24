@@ -54,4 +54,62 @@ const cosineSimilarity = (a, b) => {
     return denom === 0 ? 0 : dot / denom;
 };
 
-module.exports = { generateEmbedding, cosineSimilarity };
+// ─── CATEGORIZARE LLM (fallback pentru evenimente unde regex returnează "Altele") ──
+//
+// Folosim gemini-2.5-flash (rapid, free tier generos). Răspuns constrâns la 5 categorii
+// valide; orice altceva (inclusiv "ALTELE" sau text neașteptat) → null, păstrăm "Altele".
+
+const VALID_CATEGORIES = ['Sport', 'Festival', 'Teatru', 'Concerte', 'Social'];
+
+let chatModel = null;
+const getChatModel = () => {
+    if (!genAI) return null;
+    if (!chatModel) chatModel = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    return chatModel;
+};
+
+const categorizeWithAI = async (title, location, retries = 2) => {
+    const m = getChatModel();
+    if (!m || !title) return null;
+
+    const prompt = `Categorizează acest eveniment din România într-UNA din 5 categorii:
+
+- Sport: meciuri, alergări, fitness, baschet, fotbal, tenis, yoga, ciclism, maraton
+- Festival: festivaluri multi-zi, târguri, evenimente outdoor mari, food fest
+- Teatru: piese de teatru, operă, balet, film, stand-up, monolog, musical
+- Concerte: concerte live, recitaluri, DJ, orchestre, simfonie, jazz, rock
+- Social: ateliere, networking, expoziții, vernisaje, lansări, petreceri, conferințe
+
+Răspunde DOAR cu UN SINGUR cuvânt: numele uneia din cele 5 categorii, sau cuvântul ALTELE dacă nu se potrivește niciuna.
+NU adăuga explicații, punctuație sau alte cuvinte.
+
+Eveniment:
+Titlu: ${title}
+Locație: ${location || 'nespecificat'}`;
+
+    for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+            const result = await m.generateContent(prompt);
+            const raw = (result.response.text() || '').trim();
+            // Curățăm răspunsul: doar litere, primul cuvânt
+            const cleaned = raw.replace(/[^a-zA-ZăâîșțĂÂÎȘȚ\s]/g, '').trim().split(/\s+/)[0];
+            // Match exact (case-insensitive) cu una din cele 5 categorii valide
+            const matched = VALID_CATEGORIES.find(c => c.toLowerCase() === cleaned.toLowerCase());
+            return matched || null;
+        } catch (err) {
+            const msg = (err.message || '').toLowerCase();
+            const isRetryable = msg.includes('429') || msg.includes('rate') || msg.includes('quota') || msg.includes('timeout');
+            if (attempt < retries && isRetryable) {
+                const waitMs = 5000 * (attempt + 1);
+                console.log(`[GEMINI] categorize rate-limit, retry în ${waitMs/1000}s...`);
+                await new Promise(r => setTimeout(r, waitMs));
+                continue;
+            }
+            if (attempt === 0) console.warn(`[GEMINI] categorize eșuat: ${err.message.substring(0, 80)}`);
+            return null;
+        }
+    }
+    return null;
+};
+
+module.exports = { generateEmbedding, cosineSimilarity, categorizeWithAI };

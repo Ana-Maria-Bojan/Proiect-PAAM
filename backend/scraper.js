@@ -4,7 +4,7 @@ const cheerio = require('cheerio');
 require('dotenv').config();
 const Event = require('./models/Event');
 const { fetchPageHtml, closeBrowser } = require('./puppeteer-helper');
-const { generateEmbedding, cosineSimilarity } = require('./gemini-helper');
+const { generateEmbedding, cosineSimilarity, categorizeWithAI } = require('./gemini-helper');
 
 // Prag de similaritate semantică pentru a considera 2 evenimente duplicate.
 // 0.85 = încredere ridicată; mai mic = mai multe duplicate detectate dar mai multe falsuri pozitive.
@@ -188,7 +188,17 @@ const saveEvent = async (evt, source) => {
         }
     }
 
-    // 3. Nu e duplicat — insert nou
+    // 3. Nu e duplicat — eveniment cu adevărat nou.
+    //    Dacă regex-ul nostru nu a putut categoriza ("Altele"), încercăm cu AI înainte de insert.
+    //    Așa apelul Gemini se face DOAR pentru evenimente noi, nu și pentru duplicate.
+    if (dbEvt.category === 'Altele') {
+        const aiCategory = await categorizeWithAI(cleanTitle, dbEvt.location);
+        if (aiCategory) {
+            console.log(`[${source}] 🧠 AI: "${cleanTitle.substring(0, 40)}" → ${aiCategory}`);
+            dbEvt.category = aiCategory;
+        }
+    }
+
     if (dbEvt.image) {
         if (usedImages.has(dbEvt.image)) {
             dbEvt.image = '';
