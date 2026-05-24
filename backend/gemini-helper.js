@@ -1,5 +1,6 @@
 // Helper Google Gemini — embeddings pentru deduplicare semantică
-// Folosește modelul text-embedding-004 (free tier, 768-dim vectors)
+// Folosește modelul gemini-embedding-001 (free tier, 3072-dim vectors).
+// Notă: text-embedding-004 a fost retras de Google din API v1beta (404).
 
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
@@ -10,7 +11,7 @@ if (!process.env.GEMINI_API_KEY) {
 const genAI = process.env.GEMINI_API_KEY
     ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
     : null;
-const embedModel = genAI ? genAI.getGenerativeModel({ model: 'text-embedding-004' }) : null;
+const embedModel = genAI ? genAI.getGenerativeModel({ model: 'gemini-embedding-001' }) : null;
 
 // Generează un embedding (vector 768-dim) pentru un text.
 // Returnează null dacă API key lipsește sau cererea eșuează irecuperabil.
