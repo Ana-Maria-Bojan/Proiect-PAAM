@@ -1,0 +1,36 @@
+name: Daily Scraper
+
+# Rulează automat scraper.js zilnic + permite trigger manual din UI GitHub
+on:
+  schedule:
+    # 04:00 UTC = 06:00 (iarna) / 07:00 (vara) ora României
+    # Sintaxă cron: minute hour day-of-month month day-of-week
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+    # Permite trigger manual din tab-ul "Actions" → "Daily Scraper" → "Run workflow"
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30  # ar trebui să se termine în ~10 min, dar lăsăm buffer
+
+    steps:
+      - name: Checkout cod
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Instalare dependențe
+        working-directory: backend
+        run: npm ci
+
+      - name: Rulare scraper
+        working-directory: backend
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+        run: node scraper.js
