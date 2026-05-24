@@ -4,6 +4,11 @@ const cheerio = require('cheerio');
 require('dotenv').config();
 const Event = require('./models/Event');
 const { fetchPageHtml, closeBrowser } = require('./puppeteer-helper');
+const { generateEmbedding, cosineSimilarity } = require('./gemini-helper');
+
+// Prag de similaritate semantică pentru a considera 2 evenimente duplicate.
+// 0.85 = încredere ridicată; mai mic = mai multe duplicate detectate dar mai multe falsuri pozitive.
+const SIMILARITY_THRESHOLD = 0.85;
 
 // ─── UTILITARE ────────────────────────────────────────────────────────────────
 
@@ -132,8 +137,10 @@ const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // Set cu URL-urile de imagini deja folosite în rularea curentă
 let usedImages = new Set();
 
-// Salvează în DB cu deduplicare case-insensitive pe titlu.
-// $setOnInsert: nu suprascrie dacă evenimentul există deja.
+// Salvează în DB cu deduplicare în 2 pași:
+// 1) Match exact case-insensitive pe titlu (fast path)
+// 2) Match semantic prin cosine similarity pe embedding (Gemini text-embedding-004)
+// Când găsește duplicat, completează câmpurile lipsă (image, description, website) din noul event.
 const saveEvent = async (evt, source) => {
     const cleanTitle = (evt.title || '').trim();
     if (cleanTitle.length < 4) return;
@@ -141,7 +148,47 @@ const saveEvent = async (evt, source) => {
     const { year, ...dbEvt } = evt; // stripuim year (nu e în schema DB)
     if (!isFutureEvent(dbEvt.date, dbEvt.month, year)) return;
 
-    // Prevenim aceeași imagine la mai multe evenimente
+    // 1. Generăm embedding pentru noul eveniment (titlu + locație + dată ca semnal compozit)
+    const embeddingText = `${cleanTitle} | ${dbEvt.location || ''} | ${dbEvt.date || ''} ${dbEvt.month || ''}`;
+    const newEmbedding = await generateEmbedding(embeddingText);
+
+    // 2. Căutăm candidați pentru duplicate: same date + same month (window mic)
+    const candidates = await Event.find({
+        date: dbEvt.date,
+        month: dbEvt.month,
+    }).select('+embedding title image description website location');
+
+    for (const c of candidates) {
+        const exactMatch = (c.title || '').toLowerCase() === cleanTitle.toLowerCase();
+        const semanticMatch = newEmbedding && c.embedding && c.embedding.length === newEmbedding.length
+            && cosineSimilarity(newEmbedding, c.embedding) >= SIMILARITY_THRESHOLD;
+
+        if (exactMatch || semanticMatch) {
+            // Completăm câmpurile lipsă din evenimentul existent
+            const updates = {};
+            if (!c.image && dbEvt.image && !usedImages.has(dbEvt.image)) {
+                updates.image = dbEvt.image;
+                usedImages.add(dbEvt.image);
+            }
+            if (!c.description && dbEvt.description) updates.description = dbEvt.description;
+            if (!c.website && dbEvt.website) updates.website = dbEvt.website;
+            // Dacă existentul nu are embedding și noi am generat unul, îl salvăm
+            if ((!c.embedding || c.embedding.length === 0) && newEmbedding) {
+                updates.embedding = newEmbedding;
+            }
+
+            if (Object.keys(updates).length > 0) {
+                await Event.updateOne({ _id: c._id }, { $set: updates });
+                const tag = semanticMatch && !exactMatch ? '⊕semantic' : '⊕exact';
+                console.log(`[${source}] ${tag} merged "${cleanTitle}" → "${c.title}" (${Object.keys(updates).join(',')})`);
+            } else {
+                console.log(`[${source}] = dup "${cleanTitle}" (există: "${c.title}")`);
+            }
+            return;
+        }
+    }
+
+    // 3. Nu e duplicat — insert nou
     if (dbEvt.image) {
         if (usedImages.has(dbEvt.image)) {
             dbEvt.image = '';
@@ -151,11 +198,12 @@ const saveEvent = async (evt, source) => {
     }
 
     try {
-        await Event.findOneAndUpdate(
-            { title: { $regex: new RegExp('^' + escapeRegex(cleanTitle) + '$', 'i') } },
-            { $setOnInsert: { ...dbEvt, title: cleanTitle } },
-            { upsert: true, new: true }
-        );
+        const newEvent = new Event({
+            ...dbEvt,
+            title: cleanTitle,
+            embedding: newEmbedding || [],
+        });
+        await newEvent.save();
         console.log(`[${source}] ✓ ${cleanTitle} -> ${dbEvt.category}`);
     } catch (err) {
         if (err.code !== 11000) console.error(`[${source}] ✗ "${cleanTitle}": ${err.message}`);

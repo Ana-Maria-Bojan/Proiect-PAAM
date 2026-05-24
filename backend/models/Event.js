@@ -17,6 +17,9 @@ const EventSchema = new mongoose.Schema({
   currentAttendees: { type: Number, default: 0 },
   tags: { type: [String], default: [] },
   website: { type: String, default: '' },
+  // Vector embedding pentru deduplicare semantică (Gemini text-embedding-004 = 768 dim).
+  // select: false → nu e încărcat în queries normale (economie de bandă pentru /api/events)
+  embedding: { type: [Number], default: [], select: false },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Event', EventSchema);
