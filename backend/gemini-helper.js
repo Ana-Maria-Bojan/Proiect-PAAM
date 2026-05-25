@@ -112,4 +112,62 @@ Locație: ${location || 'nespecificat'}`;
     return null;
 };
 
-module.exports = { generateEmbedding, cosineSimilarity, categorizeWithAI };
+// ─── CHATBOT CONVERSAȚIONAL (RAG: Retrieval-Augmented Generation) ──────────
+//
+// Primește o listă de evenimente (deja filtrate de backend) + istoric de chat,
+// construiește un prompt care îl pune pe Gemini să răspundă natural în română,
+// recomandând doar din evenimentele furnizate (nu inventează).
+
+const chatWithEvents = async (userMessage, events, history = [], retries = 2) => {
+    const m = getChatModel();
+    if (!m || !userMessage) return null;
+
+    // Compactăm evenimentele într-o listă text scurtă (economie de tokens).
+    // Maxim ~40 evenimente; dacă sunt mai multe, prima parte e suficient context.
+    const eventList = (events || []).slice(0, 40).map((e, i) => {
+        const price = e.price && e.price !== '0' && e.price.toLowerCase() !== 'gratuit'
+            ? e.price : 'Gratuit';
+        return `${i + 1}. "${e.title}" — ${e.category}, ${e.date} ${e.month}, ${e.time}, ${e.location}, ${price}`;
+    }).join('\n');
+
+    const historyText = (history || []).slice(-6).map(h =>
+        `${h.role === 'user' ? 'Utilizator' : 'Asistent'}: ${h.text}`
+    ).join('\n');
+
+    const prompt = `Ești asistentul AI al aplicației "Unde mergem?", o aplicație pentru descoperit evenimente în Timișoara, România. Răspunzi prietenos, concis, în limba română.
+
+REGULI:
+- Recomandă DOAR evenimente din lista de mai jos. NU inventa evenimente.
+- Când recomanzi, menționează titlul, data și locația.
+- Dacă utilizatorul întreabă ceva ce nu se găsește în listă, spune sincer că nu ai evenimente potrivite.
+- Răspunsuri scurte (max 3-4 propoziții sau o listă cu 2-3 evenimente).
+- Nu folosi markdown complicat (fără tabele); folosește liste simple cu cratimă.
+
+EVENIMENTE DISPONIBILE (${(events || []).length} totale):
+${eventList || '(nu sunt evenimente în baza de date)'}
+
+${historyText ? `ISTORIC CONVERSAȚIE:\n${historyText}\n` : ''}
+Utilizator: ${userMessage}
+Asistent:`;
+
+    for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+            const result = await m.generateContent(prompt);
+            const text = (result.response.text() || '').trim();
+            return text || null;
+        } catch (err) {
+            const msg = (err.message || '').toLowerCase();
+            const isRetryable = msg.includes('429') || msg.includes('rate') || msg.includes('quota') || msg.includes('timeout');
+            if (attempt < retries && isRetryable) {
+                const waitMs = 3000 * (attempt + 1);
+                await new Promise(r => setTimeout(r, waitMs));
+                continue;
+            }
+            if (attempt === 0) console.warn(`[GEMINI] chat eșuat: ${err.message.substring(0, 80)}`);
+            return null;
+        }
+    }
+    return null;
+};
+
+module.exports = { generateEmbedding, cosineSimilarity, categorizeWithAI, chatWithEvents };

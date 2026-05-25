@@ -3,6 +3,7 @@ import { StyleSheet, Text, View, ScrollView, Image, TextInput, TouchableOpacity,
 import { Ionicons } from '@expo/vector-icons';
 import { apiFetch } from '../config';
 import EventImage from '../components/EventImage';
+import ChatBot from '../components/ChatBot';
 
 const CATEGORIES = ['Fluxul meu', 'Festival', 'Concerte', 'Teatru', 'Sport', 'Social', 'Altele'];
 const EVENTS_PATH = '/events';
@@ -14,6 +15,7 @@ export default function Exploreaza({ userData, onNavigateToAccount, onEventPress
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [chatVisible, setChatVisible] = useState(false);
 
   useEffect(() => {
     fetchEvents();
@@ -185,6 +187,7 @@ export default function Exploreaza({ userData, onNavigateToAccount, onEventPress
   }
 
   return (
+    <View style={{ flex: 1, backgroundColor: '#fff' }}>
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       {/* Header */}
       <View style={styles.header}>
@@ -275,8 +278,20 @@ export default function Exploreaza({ userData, onNavigateToAccount, onEventPress
         ))}
       </View>
       
-      <View style={{height: 80}} /> 
+      <View style={{height: 80}} />
     </ScrollView>
+
+    {/* Floating Chat Button — asistentul AI */}
+    <TouchableOpacity
+      style={styles.chatFab}
+      onPress={() => setChatVisible(true)}
+      activeOpacity={0.85}
+    >
+      <Ionicons name="sparkles" size={26} color="#fff" />
+    </TouchableOpacity>
+
+    <ChatBot visible={chatVisible} onClose={() => setChatVisible(false)} />
+    </View>
   );
 }
 
@@ -508,5 +523,22 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     color: '#888',
+  },
+  chatFab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 20,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: '#FF7F50',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
+    zIndex: 100,
   },
 });

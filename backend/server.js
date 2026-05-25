@@ -21,6 +21,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
 const cheerio = require('cheerio');
+const { chatWithEvents } = require('./gemini-helper');
 
 // Map cod lună -> index numeric (acceptă atât EN cât și RO, capitalizat sau nu)
 const MONTH_INDEX = {
@@ -334,6 +335,66 @@ app.delete('/api/favorites/:userId/:eventId', async (req, res) => {
 
     res.json({ message: 'Eveniment șters din favorite', favoriteEvents: user.favoriteEvents });
   } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// CHATBOT ROUTE
+//
+// Pattern RAG: filtrăm evenimentele relevante pe baza mesajului (keyword match
+// pe categorie / locație / cuvinte din titlu), apoi trimitem un context compact
+// + întrebarea utilizatorului la Gemini, care răspunde natural.
+
+const CATEGORY_KEYWORDS = {
+  Sport: ['sport', 'meci', 'fotbal', 'baschet', 'tenis', 'alergare', 'maraton', 'yoga', 'fitness', 'ciclism'],
+  Festival: ['festival', 'targ', 'târg', 'fest'],
+  Teatru: ['teatru', 'piesa', 'piesă', 'opera', 'operă', 'balet', 'film', 'stand-up', 'standup', 'musical'],
+  Concerte: ['concert', 'concerte', 'live', 'dj', 'recital', 'orchestra', 'orchestră', 'simfonie', 'jazz', 'rock', 'muzica', 'muzică'],
+  Social: ['atelier', 'workshop', 'networking', 'expozitie', 'expoziție', 'vernisaj', 'lansare', 'petrecere', 'conferinta', 'conferință'],
+};
+
+const filterRelevantEvents = (allEvents, message) => {
+  const msg = (message || '').toLowerCase();
+  if (!msg.trim()) return allEvents.slice(0, 40);
+
+  // 1. Caută categorii menționate în mesaj
+  const matchedCategories = [];
+  for (const [cat, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+    if (keywords.some(k => msg.includes(k))) matchedCategories.push(cat);
+  }
+
+  // 2. Filtrare după categorie sau cuvinte din titlu/locație
+  const filtered = allEvents.filter(e => {
+    const inCategory = matchedCategories.length > 0 && matchedCategories.includes(e.category);
+    const titleHit = (e.title || '').toLowerCase().split(/\s+/).some(w => w.length > 3 && msg.includes(w));
+    const locHit = (e.location || '').toLowerCase().split(/[\s,]+/).some(w => w.length > 3 && msg.includes(w));
+    return inCategory || titleHit || locHit;
+  });
+
+  // Dacă filtrul a tăiat prea mult, întoarcem primele 40 ca să avem context
+  return filtered.length >= 5 ? filtered.slice(0, 40) : allEvents.slice(0, 40);
+};
+
+app.post('/api/chat', async (req, res) => {
+  try {
+    const { message, history } = req.body || {};
+    if (!message || typeof message !== 'string') {
+      return res.status(400).json({ message: 'Mesaj invalid' });
+    }
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(503).json({ message: 'Chatbot indisponibil — API key lipsă pe server.' });
+    }
+
+    const allEvents = (await Event.find()).filter(isEventInFuture);
+    const relevantEvents = filterRelevantEvents(allEvents, message);
+
+    const reply = await chatWithEvents(message, relevantEvents, Array.isArray(history) ? history : []);
+    if (!reply) {
+      return res.status(502).json({ message: 'Asistentul nu a putut răspunde. Încearcă din nou.' });
+    }
+    res.json({ reply });
+  } catch (err) {
+    console.error('Chat error:', err);
     res.status(500).json({ message: err.message });
   }
 });
