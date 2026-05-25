@@ -3,9 +3,12 @@ name: Daily Scraper
 # Rulează automat scraper.js zilnic + permite trigger manual din UI GitHub
 on:
   schedule:
-    # 04:00 UTC = 06:00 (iarna) / 07:00 (vara) ora României
+    # 04:17 UTC = 06:17 (iarna) / 07:17 (vara) ora României.
+    # IMPORTANT: evităm minutele :00, :15, :30, :45 (heavily loaded pe GitHub Actions).
+    # Pentru repo-uri private pe free tier, scheduled workflows la fix :00 sunt frecvent întârziate
+    # sau omise complet. Un minut "liniștit" precum :17 are șanse mult mai mari să ruleze la timp.
     # Sintaxă cron: minute hour day-of-month month day-of-week
-    - cron: '0 4 * * *'
+    - cron: '17 4 * * *'
   workflow_dispatch:
     # Permite trigger manual din tab-ul "Actions" → "Daily Scraper" → "Run workflow"
 
