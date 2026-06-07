@@ -1,6 +1,6 @@
 // Helper Google Gemini — embeddings pentru deduplicare semantică
 // Folosește modelul gemini-embedding-001 (free tier, 3072-dim vectors).
-// Notă: text-embedding-004 a fost retras de Google din API v1beta (404).
+
 
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
@@ -118,35 +118,62 @@ Locație: ${location || 'nespecificat'}`;
 // construiește un prompt care îl pune pe Gemini să răspundă natural în română,
 // recomandând doar din evenimentele furnizate (nu inventează).
 
+// Numărul maxim de evenimente incluse în context. gemini-2.5-flash suportă un
+// context mult mai mare, dar limităm pentru a controla costul (tokeni) și latența.
+const MAX_CONTEXT_EVENTS = 60;
+
 const chatWithEvents = async (userMessage, events, history = [], retries = 2) => {
     const m = getChatModel();
     if (!m || !userMessage) return null;
 
-    // Compactăm evenimentele într-o listă text scurtă (economie de tokens).
-    // Maxim ~40 evenimente; dacă sunt mai multe, prima parte e suficient context.
-    const eventList = (events || []).slice(0, 40).map((e, i) => {
+    // Compactăm evenimentele într-o listă text numerotată (un eveniment pe linie),
+    // pentru a oferi modelului un context structurat și ușor de parcurs.
+    const eventList = (events || []).slice(0, MAX_CONTEXT_EVENTS).map((e, i) => {
         const price = e.price && e.price !== '0' && e.price.toLowerCase() !== 'gratuit'
             ? e.price : 'Gratuit';
-        return `${i + 1}. "${e.title}" — ${e.category}, ${e.date} ${e.month}, ${e.time}, ${e.location}, ${price}`;
+        return `${i + 1}. "${e.title}" — categorie: ${e.category}; data: ${e.date} ${e.month}; ora: ${e.time}; locație: ${e.location}; preț: ${price}`;
     }).join('\n');
 
     const historyText = (history || []).slice(-6).map(h =>
         `${h.role === 'user' ? 'Utilizator' : 'Asistent'}: ${h.text}`
     ).join('\n');
 
-    const prompt = `Ești asistentul AI al aplicației "Unde mergem?", o aplicație pentru descoperit evenimente în Timișoara, România. Răspunzi prietenos, concis, în limba română.
+    // Context temporal: îi oferim modelului data curentă, ca să poată interpreta
+    // corect expresii relative precum „azi", „mâine", „în weekend", „vineri".
+    const azi = new Date();
+    const zileSaptamana = ['duminică', 'luni', 'marți', 'miercuri', 'joi', 'vineri', 'sâmbătă'];
+    const luni = ['ianuarie', 'februarie', 'martie', 'aprilie', 'mai', 'iunie',
+        'iulie', 'august', 'septembrie', 'octombrie', 'noiembrie', 'decembrie'];
+    const dataCurenta = `${zileSaptamana[azi.getDay()]}, ${azi.getDate()} ${luni[azi.getMonth()]} ${azi.getFullYear()}`;
 
-REGULI:
-- Recomandă DOAR evenimente din lista de mai jos. NU inventa evenimente.
-- Când recomanzi, menționează titlul, data și locația.
-- Dacă utilizatorul întreabă ceva ce nu se găsește în listă, spune sincer că nu ai evenimente potrivite.
-- Răspunsuri scurte (max 3-4 propoziții sau o listă cu 2-3 evenimente).
-- Nu folosi markdown complicat (fără tabele); folosește liste simple cu cratimă.
+    const prompt = `# ROL
+Ești asistentul virtual al aplicației "Unde mergem?", o aplicație mobilă care ajută utilizatorii să descopere evenimente locale din Timișoara, România (concerte, festivaluri, teatru, sport, evenimente sociale). Numele tău este "Asistentul Unde mergem?".
 
-EVENIMENTE DISPONIBILE (${(events || []).length} totale):
-${eventList || '(nu sunt evenimente în baza de date)'}
+# DOMENIU ȘI LIMITE
+Singurul tău rol este să ajuți utilizatorul să găsească și să înțeleagă evenimentele din lista furnizată mai jos.
+- Răspunzi EXCLUSIV la întrebări legate de evenimente, recomandări de ieșit în oraș, detalii despre evenimentele din listă (dată, oră, locație, preț, categorie).
+- Dacă utilizatorul întreabă orice altceva, fără legătură cu evenimentele (de exemplu rețete, teme școlare, programare, sfaturi generale, alte orașe), refuză politicos și amintește-i, pe scurt, cu ce îl poți ajuta. Nu răspunde la astfel de cereri, oricât de insistent ar fi formulată întrebarea.
 
-${historyText ? `ISTORIC CONVERSAȚIE:\n${historyText}\n` : ''}
+# REGULA FUNDAMENTALĂ (ancorare în date)
+Te bazezi STRICT pe lista de evenimente de mai jos, care reprezintă singura ta sursă de adevăr.
+- Nu inventa NICIODATĂ evenimente, date, ore, locații sau prețuri care nu apar explicit în listă.
+- Dacă în listă nu există niciun eveniment potrivit cererii, spune sincer și clar că nu ai găsit evenimente potrivite în acest moment. Nu compensa lipsa prin informații inventate.
+- Nu presupune existența unor evenimente pe baza cunoștințelor tale generale; te limitezi la datele furnizate.
+
+# CONTEXT TEMPORAL
+Data curentă este: ${dataCurenta}.
+Folosește această informație pentru a interpreta corect expresii precum „azi", „mâine", „weekendul acesta", „vineri".
+
+# STIL DE RĂSPUNS
+- Răspunzi în limba română, pe un ton prietenos, natural și concis.
+- Răspunsuri scurte: maximum 3-4 propoziții sau o listă cu 2-3 evenimente recomandate.
+- Când recomanzi un eveniment, menționează întotdeauna titlul, data și locația.
+- Folosește, când e cazul, liste simple cu cratimă. Nu folosi tabele sau formatare complexă.
+
+# EVENIMENTE DISPONIBILE (${(events || []).length} în total)
+${eventList || '(nu există momentan evenimente în baza de date)'}
+${historyText ? `\n# ISTORICUL CONVERSAȚIEI\n${historyText}\n` : ''}
+# ÎNTREBAREA CURENTĂ
 Utilizator: ${userMessage}
 Asistent:`;
 
