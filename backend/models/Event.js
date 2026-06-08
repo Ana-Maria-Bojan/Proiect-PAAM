@@ -11,10 +11,6 @@ const EventSchema = new mongoose.Schema({
   category: { type: String, required: true }, // 'Fluxul meu', 'Festival', 'Concerte', etc.
   description: { type: String, default: '' },
   organizer: { type: String, default: '' },
-  contactEmail: { type: String, default: '' },
-  contactPhone: { type: String, default: '' },
-  maxAttendees: { type: Number, default: 0 },
-  currentAttendees: { type: Number, default: 0 },
   tags: { type: [String], default: [] },
   website: { type: String, default: '' },
   // Vector embedding pentru deduplicare semantică (Gemini gemini-embedding-001 = 3072 dim).

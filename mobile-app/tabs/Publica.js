@@ -29,6 +29,7 @@ export default function Publica({ userData, onNavigateToAccount, onBack }) {
   // Ticket / Price Logic
   const [isFree, setIsFree] = useState(true);
   const [price, setPrice] = useState('');
+  const [ticketLink, setTicketLink] = useState(''); // link opțional către pagina de bilete
 
   // Image Logic
   const [image, setImage] = useState(null);
@@ -148,13 +149,9 @@ export default function Publica({ userData, onNavigateToAccount, onBack }) {
       price: isFree ? 'Gratuit' : price.trim(),
       image: image || '',
       category: category,
-      organizer: 'Utilizator',
-      contactEmail: 'contact@events.ro',
-      contactPhone: '+40 256 123 456',
-      maxAttendees: 100,
-      currentAttendees: 0,
+      organizer: userData?.name || 'Utilizator',
       tags: [category, location],
-      website: '',
+      website: isFree ? '' : ticketLink.trim(),
     };
 
     try {
@@ -418,6 +415,25 @@ export default function Publica({ userData, onNavigateToAccount, onBack }) {
               editable={!isFree}
             />
           </View>
+
+          {/* Ticket Link (doar pentru evenimente cu plată) */}
+          {!isFree && (
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Link bilete (opțional)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="ex: https://... pagina unde se cumpără biletele"
+                placeholderTextColor="#9CA3AF"
+                value={ticketLink}
+                onChangeText={setTicketLink}
+                autoCapitalize="none"
+                keyboardType="url"
+              />
+              <Text style={styles.helperText}>
+                Dacă ai o pagină de bilete, adaug-o aici. Altfel, scrie detaliile în descriere.
+              </Text>
+            </View>
+          )}
 
           {/* Image Upload */}
           <View style={styles.inputGroup}>
@@ -870,6 +886,11 @@ const styles = StyleSheet.create({
   disabledInput: {
     backgroundColor: '#F9FAFB',
     color: '#9CA3AF',
+  },
+  helperText: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginTop: 6,
   },
   loginPromptContainer: {
     flex: 1,

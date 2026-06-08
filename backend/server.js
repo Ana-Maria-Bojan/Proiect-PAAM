@@ -205,10 +205,6 @@ app.post('/api/events', async (req, res) => {
       image,
       category,
       organizer,
-      contactEmail,
-      contactPhone,
-      maxAttendees,
-      currentAttendees,
       tags,
       website,
     } = req.body;
@@ -238,10 +234,6 @@ app.post('/api/events', async (req, res) => {
       image: image || '',
       category,
       organizer: organizer || '',
-      contactEmail: contactEmail || '',
-      contactPhone: contactPhone || '',
-      maxAttendees: maxAttendees || 0,
-      currentAttendees: currentAttendees || 0,
       tags: tags || [],
       website: website || '',
     });

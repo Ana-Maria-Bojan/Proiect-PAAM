@@ -156,9 +156,11 @@ export default function EventDetails({ eventId, onBack, isFavorite, onToggleFavo
     );
   }
 
-  const attendancePercentage = event.maxAttendees > 0 
-    ? (event.currentAttendees / event.maxAttendees) * 100 
-    : 0;
+  // Evenimentele gratuite nu au bilet de cumpărat → afișăm „Intrare liberă".
+  const isFreeEvent = !event.price || /gratuit|free|intrare\s*liber/i.test(event.price);
+  // Are un link specific (nu doar homepage) → butonul deschide direct pagina de bilete.
+  const ticketUrl = normalizeUrl(event?.website);
+  const hasSpecificLink = ticketUrl && !isHomepageOnly(ticketUrl);
 
   return (
     <View style={styles.container}>
@@ -238,26 +240,6 @@ export default function EventDetails({ eventId, onBack, isFavorite, onToggleFavo
             </View>
           )}
 
-          {/* Attendance */}
-          {event.maxAttendees > 0 && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Participanți</Text>
-              <View style={styles.attendanceCard}>
-                <View style={styles.attendanceInfo}>
-                  <Text style={styles.attendanceText}>
-                    {event.currentAttendees || 0} / {event.maxAttendees} persoane
-                  </Text>
-                  <Text style={styles.attendanceSubtext}>
-                    {event.maxAttendees - (event.currentAttendees || 0)} locuri disponibile
-                  </Text>
-                </View>
-                <View style={styles.progressBarContainer}>
-                  <View style={[styles.progressBar, { width: `${attendancePercentage}%` }]} />
-                </View>
-              </View>
-            </View>
-          )}
-
           {/* Tags */}
           {event.tags && event.tags.length > 0 && (
             <View style={styles.section}>
@@ -278,17 +260,28 @@ export default function EventDetails({ eventId, onBack, isFavorite, onToggleFavo
 
       {/* Bottom Action Button */}
       <View style={styles.bottomContainer}>
-        <TouchableOpacity onPress={handleBuyTicket} activeOpacity={0.8}>
-          <LinearGradient
-            colors={['#FF3366', '#FF6B9D']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.buyButton}
-          >
-            <Ionicons name="ticket" size={24} color="#fff" />
-            <Text style={styles.buyButtonText}>Cumpără bilet</Text>
-          </LinearGradient>
-        </TouchableOpacity>
+        {isFreeEvent ? (
+          // Eveniment gratuit — niciun bilet de cumpărat
+          <View style={styles.freeBadge}>
+            <Ionicons name="checkmark-circle" size={24} color="#fff" />
+            <Text style={styles.buyButtonText}>Intrare liberă</Text>
+          </View>
+        ) : (
+          <TouchableOpacity onPress={handleBuyTicket} activeOpacity={0.8}>
+            <LinearGradient
+              colors={['#FF3366', '#FF6B9D']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.buyButton}
+            >
+              <Ionicons name="ticket" size={24} color="#fff" />
+              {/* Link specific → cumpărare directă; altfel → căutare online */}
+              <Text style={styles.buyButtonText}>
+                {hasSpecificLink ? 'Cumpără bilet' : 'Caută bilete online'}
+              </Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
@@ -473,35 +466,6 @@ const styles = StyleSheet.create({
     color: '#007AFF',
     marginTop: 4,
   },
-  attendanceCard: {
-    backgroundColor: '#F8F9FA',
-    borderRadius: 12,
-    padding: 16,
-  },
-  attendanceInfo: {
-    marginBottom: 12,
-  },
-  attendanceText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-  },
-  attendanceSubtext: {
-    fontSize: 13,
-    color: '#888',
-    marginTop: 4,
-  },
-  progressBarContainer: {
-    height: 8,
-    backgroundColor: '#E5E5EA',
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  progressBar: {
-    height: '100%',
-    backgroundColor: '#FF3366',
-    borderRadius: 4,
-  },
   tagsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -540,6 +504,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 16,
     borderRadius: 12,
+  },
+  freeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 12,
+    backgroundColor: '#34C759',
   },
   buyButtonText: {
     color: '#fff',
