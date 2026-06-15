@@ -240,6 +240,21 @@ export default function EventDetails({ eventId, onBack, isFavorite, onToggleFavo
             </View>
           )}
 
+          {/* Organizator */}
+          {event.organizer && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Organizator</Text>
+              <View style={styles.organizerCard}>
+                <View style={styles.organizerIcon}>
+                  <Ionicons name="person" size={24} color="#FF3366" />
+                </View>
+                <View style={styles.organizerInfo}>
+                  <Text style={styles.organizerName}>{event.organizer}</Text>
+                </View>
+              </View>
+            </View>
+          )}
+
           {/* Tags */}
           {event.tags && event.tags.length > 0 && (
             <View style={styles.section}>

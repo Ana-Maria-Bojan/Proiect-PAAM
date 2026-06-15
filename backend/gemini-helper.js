@@ -187,10 +187,12 @@ Asistent:`;
             const isRetryable = msg.includes('429') || msg.includes('rate') || msg.includes('quota') || msg.includes('timeout');
             if (attempt < retries && isRetryable) {
                 const waitMs = 3000 * (attempt + 1);
+                console.warn(`[GEMINI] chat rate-limit (încercarea ${attempt + 1}), reîncerc în ${waitMs / 1000}s...`);
                 await new Promise(r => setTimeout(r, waitMs));
                 continue;
             }
-            if (attempt === 0) console.warn(`[GEMINI] chat eșuat: ${err.message.substring(0, 80)}`);
+            // Logăm întotdeauna motivul real al eșecului final (nu doar la prima încercare).
+            console.error(`[GEMINI] chat eșuat definitiv: ${err.message}`);
             return null;
         }
     }
