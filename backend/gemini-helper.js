@@ -61,16 +61,57 @@ const cosineSimilarity = (a, b) => {
 
 const VALID_CATEGORIES = ['Sport', 'Festival', 'Teatru', 'Concerte', 'Social'];
 
-let chatModel = null;
-const getChatModel = () => {
+// Modele pentru sarcinile generative (categorizare + chat), în ordinea preferinței.
+// gemini-2.5-flash este modelul principal; dacă acesta își epuizează cota gratuită
+// zilnică (eroare 429), se trece AUTOMAT la gemini-2.0-flash, care are o cotă mai mare.
+const CHAT_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+const modelCache = {};
+const getModel = (name) => {
     if (!genAI) return null;
-    if (!chatModel) chatModel = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-    return chatModel;
+    if (!modelCache[name]) modelCache[name] = genAI.getGenerativeModel({ model: name });
+    return modelCache[name];
 };
 
-const categorizeWithAI = async (title, location, retries = 2) => {
-    const m = getChatModel();
-    if (!m || !title) return null;
+// Generează text încercând modelele în ordinea din CHAT_MODELS.
+// - Eroare de cotă (429) pe un model → trece imediat la următorul model (fallback).
+// - Eroare tranzitorie (rate-limit pe minut, timeout) → reîncearcă același model.
+// Returnează textul generat sau null dacă toate modelele eșuează.
+const generateWithFallback = async (prompt, label = 'AI', retries = 2) => {
+    if (!genAI) return null;
+    for (let mi = 0; mi < CHAT_MODELS.length; mi++) {
+        const modelName = CHAT_MODELS[mi];
+        const m = getModel(modelName);
+        if (!m) continue;
+        const isLastModel = mi === CHAT_MODELS.length - 1;
+
+        for (let attempt = 0; attempt <= retries; attempt++) {
+            try {
+                const result = await m.generateContent(prompt);
+                if (mi > 0) console.log(`[GEMINI] ${label}: folosit modelul de rezervă ${modelName}`);
+                return (result.response.text() || '').trim();
+            } catch (err) {
+                const msg = (err.message || '').toLowerCase();
+                const isQuota = msg.includes('429') || msg.includes('quota') || msg.includes('exceeded');
+                const isTransient = msg.includes('rate') || msg.includes('timeout');
+
+                if (isQuota) {
+                    console.warn(`[GEMINI] ${label}: cotă depășită pe ${modelName}${isLastModel ? '' : ' → trec la modelul de rezervă'}`);
+                    break; // nu mai insistăm pe acest model; trecem la următorul (dacă există)
+                }
+                if (attempt < retries && isTransient) {
+                    await new Promise(r => setTimeout(r, 3000 * (attempt + 1)));
+                    continue;
+                }
+                console.error(`[GEMINI] ${label} eșuat pe ${modelName}: ${err.message}`);
+                break; // eroare nerecuperabilă pe acest model; încercăm următorul (dacă există)
+            }
+        }
+    }
+    return null;
+};
+
+const categorizeWithAI = async (title, location) => {
+    if (!genAI || !title) return null;
 
     const prompt = `Categorizează acest eveniment din România într-UNA din 5 categorii:
 
@@ -87,29 +128,13 @@ Eveniment:
 Titlu: ${title}
 Locație: ${location || 'nespecificat'}`;
 
-    for (let attempt = 0; attempt <= retries; attempt++) {
-        try {
-            const result = await m.generateContent(prompt);
-            const raw = (result.response.text() || '').trim();
-            // Curățăm răspunsul: doar litere, primul cuvânt
-            const cleaned = raw.replace(/[^a-zA-ZăâîșțĂÂÎȘȚ\s]/g, '').trim().split(/\s+/)[0];
-            // Match exact (case-insensitive) cu una din cele 5 categorii valide
-            const matched = VALID_CATEGORIES.find(c => c.toLowerCase() === cleaned.toLowerCase());
-            return matched || null;
-        } catch (err) {
-            const msg = (err.message || '').toLowerCase();
-            const isRetryable = msg.includes('429') || msg.includes('rate') || msg.includes('quota') || msg.includes('timeout');
-            if (attempt < retries && isRetryable) {
-                const waitMs = 5000 * (attempt + 1);
-                console.log(`[GEMINI] categorize rate-limit, retry în ${waitMs/1000}s...`);
-                await new Promise(r => setTimeout(r, waitMs));
-                continue;
-            }
-            if (attempt === 0) console.warn(`[GEMINI] categorize eșuat: ${err.message.substring(0, 80)}`);
-            return null;
-        }
-    }
-    return null;
+    const raw = await generateWithFallback(prompt, 'categorize');
+    if (!raw) return null;
+    // Curățăm răspunsul: doar litere, primul cuvânt
+    const cleaned = raw.replace(/[^a-zA-ZăâîșțĂÂÎȘȚ\s]/g, '').trim().split(/\s+/)[0];
+    // Match exact (case-insensitive) cu una din cele 5 categorii valide
+    const matched = VALID_CATEGORIES.find(c => c.toLowerCase() === cleaned.toLowerCase());
+    return matched || null;
 };
 
 // ─── CHATBOT CONVERSAȚIONAL (RAG: Retrieval-Augmented Generation) ──────────
@@ -122,9 +147,8 @@ Locație: ${location || 'nespecificat'}`;
 // context mult mai mare, dar limităm pentru a controla costul (tokeni) și latența.
 const MAX_CONTEXT_EVENTS = 60;
 
-const chatWithEvents = async (userMessage, events, history = [], retries = 2) => {
-    const m = getChatModel();
-    if (!m || !userMessage) return null;
+const chatWithEvents = async (userMessage, events, history = []) => {
+    if (!genAI || !userMessage) return null;
 
     // Compactăm evenimentele într-o listă text numerotată (un eveniment pe linie),
     // pentru a oferi modelului un context structurat și ușor de parcurs.
@@ -177,26 +201,8 @@ ${historyText ? `\n# ISTORICUL CONVERSAȚIEI\n${historyText}\n` : ''}
 Utilizator: ${userMessage}
 Asistent:`;
 
-    for (let attempt = 0; attempt <= retries; attempt++) {
-        try {
-            const result = await m.generateContent(prompt);
-            const text = (result.response.text() || '').trim();
-            return text || null;
-        } catch (err) {
-            const msg = (err.message || '').toLowerCase();
-            const isRetryable = msg.includes('429') || msg.includes('rate') || msg.includes('quota') || msg.includes('timeout');
-            if (attempt < retries && isRetryable) {
-                const waitMs = 3000 * (attempt + 1);
-                console.warn(`[GEMINI] chat rate-limit (încercarea ${attempt + 1}), reîncerc în ${waitMs / 1000}s...`);
-                await new Promise(r => setTimeout(r, waitMs));
-                continue;
-            }
-            // Logăm întotdeauna motivul real al eșecului final (nu doar la prima încercare).
-            console.error(`[GEMINI] chat eșuat definitiv: ${err.message}`);
-            return null;
-        }
-    }
-    return null;
+    const reply = await generateWithFallback(prompt, 'chat');
+    return reply || null;
 };
 
 module.exports = { generateEmbedding, cosineSimilarity, categorizeWithAI, chatWithEvents };
