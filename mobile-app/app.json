@@ -19,6 +19,7 @@
       }
     },
     "android": {
+      "package": "com.anamaria.undemergem",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -28,10 +29,25 @@
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
         "READ_MEDIA_IMAGES"
-      ]
+      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyBhaJLtClFHxyk708C256eotGa2q5cFwjc"
+        }
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "29a7a544-1bf7-49af-904d-492bf9acecf6"
+      }
+    },
+    "owner": "anabm16",
+    "plugins": [
+      "expo-web-browser",
+      "expo-font"
+    ]
   }
 }
