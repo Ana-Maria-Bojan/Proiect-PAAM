@@ -373,7 +373,7 @@ app.post('/api/chat', async (req, res) => {
     if (!message || typeof message !== 'string') {
       return res.status(400).json({ message: 'Mesaj invalid' });
     }
-    if (!process.env.GEMINI_API_KEY) {
+    if (!process.env.GROQ_API_KEY) {
       return res.status(503).json({ message: 'Chatbot indisponibil — API key lipsă pe server.' });
     }
 

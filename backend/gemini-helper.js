@@ -3,6 +3,7 @@
 
 
 const { GoogleGenAI } = require('@google/genai');
+const axios = require('axios');
 
 if (!process.env.GEMINI_API_KEY) {
     console.warn('[GEMINI] ATENȚIE: GEMINI_API_KEY nu e setat în .env — deduplicarea semantică va fi dezactivată.');
@@ -141,8 +142,40 @@ Locație: ${location || 'nespecificat'}`;
 // context mult mai mare, dar limităm pentru a controla costul (tokeni) și latența.
 const MAX_CONTEXT_EVENTS = 60;
 
+// ─── GROQ (doar pentru chatbot) ───────────────────────────────────────────────
+
+const GROQ_MODEL = 'llama-3.3-70b-versatile';
+
+const chatWithGroq = async (prompt) => {
+    if (!process.env.GROQ_API_KEY) {
+        console.warn('[GROQ] GROQ_API_KEY nu e setat — chatbot-ul nu poate răspunde.');
+        return null;
+    }
+    try {
+        const res = await axios.post(
+            'https://api.groq.com/openai/v1/chat/completions',
+            {
+                model: GROQ_MODEL,
+                messages: [{ role: 'user', content: prompt }],
+                temperature: 0.7,
+            },
+            {
+                headers: {
+                    'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
+                    'Content-Type': 'application/json',
+                },
+                timeout: 30000,
+            }
+        );
+        return (res.data?.choices?.[0]?.message?.content || '').trim() || null;
+    } catch (err) {
+        console.error(`[GROQ] chat eșuat: ${err.response?.status || ''} ${err.message}`);
+        return null;
+    }
+};
+
 const chatWithEvents = async (userMessage, events, history = []) => {
-    if (!ai || !userMessage) return null;
+    if (!userMessage) return null;
 
     // Compactăm evenimentele într-o listă text numerotată (un eveniment pe linie),
     // pentru a oferi modelului un context structurat și ușor de parcurs.
@@ -195,7 +228,7 @@ ${historyText ? `\n# ISTORICUL CONVERSAȚIEI\n${historyText}\n` : ''}
 Utilizator: ${userMessage}
 Asistent:`;
 
-    const reply = await generateWithFallback(prompt, 'chat');
+    const reply = await chatWithGroq(prompt);
     return reply || null;
 };
 
