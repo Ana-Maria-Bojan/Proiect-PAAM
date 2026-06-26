@@ -2,26 +2,28 @@
 // Folosește modelul gemini-embedding-001 (free tier, 3072-dim vectors).
 
 
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { GoogleGenAI } = require('@google/genai');
 
 if (!process.env.GEMINI_API_KEY) {
     console.warn('[GEMINI] ATENȚIE: GEMINI_API_KEY nu e setat în .env — deduplicarea semantică va fi dezactivată.');
 }
 
-const genAI = process.env.GEMINI_API_KEY
-    ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
+// Biblioteca oficială nouă (@google/genai) — suportă cheile API actuale
+// (inclusiv cele legate de service account, format nou). Cheia se ia din env.
+const ai = process.env.GEMINI_API_KEY
+    ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
     : null;
-const embedModel = genAI ? genAI.getGenerativeModel({ model: 'gemini-embedding-001' }) : null;
+const EMBED_MODEL = 'gemini-embedding-001';
 
 // Generează un embedding (vector 768-dim) pentru un text.
 // Returnează null dacă API key lipsește sau cererea eșuează irecuperabil.
 // Are retry cu backoff exponențial pentru rate-limit (429).
 const generateEmbedding = async (text, retries = 2) => {
-    if (!embedModel || !text || typeof text !== 'string') return null;
+    if (!ai || !text || typeof text !== 'string') return null;
     for (let attempt = 0; attempt <= retries; attempt++) {
         try {
-            const result = await embedModel.embedContent(text);
-            return result.embedding.values; // array de 768 floats
+            const result = await ai.models.embedContent({ model: EMBED_MODEL, contents: text });
+            return result.embeddings[0].values; // array de floats
         } catch (err) {
             const msg = (err.message || '').toLowerCase();
             const isRetryable = msg.includes('429') || msg.includes('rate') || msg.includes('quota') || msg.includes('timeout');
@@ -65,30 +67,22 @@ const VALID_CATEGORIES = ['Sport', 'Festival', 'Teatru', 'Concerte', 'Social'];
 // gemini-2.5-flash este modelul principal; dacă acesta își epuizează cota gratuită
 // zilnică (eroare 429), se trece AUTOMAT la gemini-2.0-flash, care are o cotă mai mare.
 const CHAT_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash'];
-const modelCache = {};
-const getModel = (name) => {
-    if (!genAI) return null;
-    if (!modelCache[name]) modelCache[name] = genAI.getGenerativeModel({ model: name });
-    return modelCache[name];
-};
 
 // Generează text încercând modelele în ordinea din CHAT_MODELS.
 // - Eroare de cotă (429) pe un model → trece imediat la următorul model (fallback).
 // - Eroare tranzitorie (rate-limit pe minut, timeout) → reîncearcă același model.
 // Returnează textul generat sau null dacă toate modelele eșuează.
 const generateWithFallback = async (prompt, label = 'AI', retries = 2) => {
-    if (!genAI) return null;
+    if (!ai) return null;
     for (let mi = 0; mi < CHAT_MODELS.length; mi++) {
         const modelName = CHAT_MODELS[mi];
-        const m = getModel(modelName);
-        if (!m) continue;
         const isLastModel = mi === CHAT_MODELS.length - 1;
 
         for (let attempt = 0; attempt <= retries; attempt++) {
             try {
-                const result = await m.generateContent(prompt);
+                const result = await ai.models.generateContent({ model: modelName, contents: prompt });
                 if (mi > 0) console.log(`[GEMINI] ${label}: folosit modelul de rezervă ${modelName}`);
-                return (result.response.text() || '').trim();
+                return (result.text || '').trim();
             } catch (err) {
                 const msg = (err.message || '').toLowerCase();
                 const isQuota = msg.includes('429') || msg.includes('quota') || msg.includes('exceeded');
@@ -111,7 +105,7 @@ const generateWithFallback = async (prompt, label = 'AI', retries = 2) => {
 };
 
 const categorizeWithAI = async (title, location) => {
-    if (!genAI || !title) return null;
+    if (!ai || !title) return null;
 
     const prompt = `Categorizează acest eveniment din România într-UNA din 5 categorii:
 
@@ -148,7 +142,7 @@ Locație: ${location || 'nespecificat'}`;
 const MAX_CONTEXT_EVENTS = 60;
 
 const chatWithEvents = async (userMessage, events, history = []) => {
-    if (!genAI || !userMessage) return null;
+    if (!ai || !userMessage) return null;
 
     // Compactăm evenimentele într-o listă text numerotată (un eveniment pe linie),
     // pentru a oferi modelului un context structurat și ușor de parcurs.
