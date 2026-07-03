@@ -6,7 +6,7 @@ Aplicație mobilă și backend pentru evenimente în Timișoara.
 
 - **backend/**: Server Node.js + Express + MongoDB. Se ocupă de API și de scraping-ul evenimentelor.
 - **mobile-app/**: Aplicație React Native (Expo).
-- **frontend/**: (Placeholder pentru viitoare dezvoltări web)
+
 
 ## Setup
 
