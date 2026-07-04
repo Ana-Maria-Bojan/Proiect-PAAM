@@ -141,12 +141,31 @@ let usedImages = new Set();
 // 1) Match exact case-insensitive pe titlu (fast path)
 // 2) Match semantic prin cosine similarity pe embedding (Gemini text-embedding-004)
 // Când găsește duplicat, completează câmpurile lipsă (image, description, website) din noul event.
+// Păstrăm doar evenimentele din Timișoara și localitățile județului Timiș.
+// Agregatoarele internaționale (allevents, happeningnext, eventbrite) includ evenimente
+// pe rază geografică largă: Timișoara e la ~150 km de Belgrad/Novi Sad (Serbia),
+// ~85 km de Szeged (Ungaria) și ~50 km de Arad. Strategia: respingem orice eveniment
+// a cărui locație numește explicit o localitate din AFARA județului Timiș; locațiile
+// fără oraș (ex. doar numele sălii) sunt acceptate, sursele fiind centrate pe Timișoara.
+const FOREIGN_LOCATION = /\b(serbia|srbija|beograd|belgrade|novi\s*sad|vr[sš]ac|zrenjanin|pan[cč]evo|kikinda|subotica|sombor|hungary|magyarorsz|szeged|budapest)\b/i;
+const RO_OUTSIDE_TIMIS = /\b(arad|lipova|oradea|cluj|bucure[sș]ti|bucharest|bra[sș]ov|sibiu|ia[sș]i|constan[tț]a|craiova|gala[tț]i|ploie[sș]ti|pite[sș]ti|re[sș]i[tț]a|caransebe[sș]|b[aă]ile\s*herculane|or[aă][sș]ova|drobeta|deva|hunedoara|alba\s*iulia|baia\s*mare|satu\s*mare|t[aâ]rgu\s*mure[sș]|suceava|bistri[tț]a|zal[aă]u)\b/i;
+
+const isOutsideRegion = (location) =>
+    FOREIGN_LOCATION.test(location || '') || RO_OUTSIDE_TIMIS.test(location || '');
+
 const saveEvent = async (evt, source) => {
     const cleanTitle = (evt.title || '').trim();
     if (cleanTitle.length < 4) return;
 
     const { year, ...dbEvt } = evt; // stripuim year (nu e în schema DB)
     if (!isFutureEvent(dbEvt.date, dbEvt.month, year)) return;
+
+    // Filtru geografic: păstrăm doar evenimentele din județul Timiș — respingem
+    // localitățile străine (Serbia, Ungaria) și orașele românești din alte județe.
+    if (isOutsideRegion(dbEvt.location)) {
+        console.log(`[${source}] ✗ respins (în afara județului Timiș): "${cleanTitle}" @ ${dbEvt.location}`);
+        return;
+    }
 
     // 1. Generăm embedding pentru noul eveniment (titlu + locație + dată ca semnal compozit)
     const embeddingText = `${cleanTitle} | ${dbEvt.location || ''} | ${dbEvt.date || ''} ${dbEvt.month || ''}`;
@@ -417,6 +436,19 @@ const cleanPastEvents = async () => {
         await Event.deleteMany({ _id: { $in: pastIds } });
     }
     console.log(`✓ Curățate ${pastIds.length} evenimente trecute din DB.`);
+};
+
+// Șterge evenimentele din afara județului Timiș ajunse anterior în DB
+// prin agregatoarele internaționale, înainte de a fi adăugat filtrul geografic.
+const cleanForeignEvents = async () => {
+    const all = await Event.find();
+    const foreignIds = all
+        .filter(e => isOutsideRegion(e.location))
+        .map(e => e._id);
+    if (foreignIds.length > 0) {
+        await Event.deleteMany({ _id: { $in: foreignIds } });
+    }
+    console.log(`✓ Curățate ${foreignIds.length} evenimente din afara regiunii din DB.`);
 };
 
 // Șterge imaginile duplicate: dacă același URL apare la N evenimente,
@@ -1612,6 +1644,7 @@ const run = async () => {
         usedImages = new Set(); // reset imagini per run
 
         await cleanPastEvents();
+        await cleanForeignEvents();
         await cleanDuplicateImages();
 
         // Scrapere axios + cheerio (rapide, pentru site-uri publice fără protecții)
