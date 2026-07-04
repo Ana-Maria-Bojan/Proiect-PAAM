@@ -150,19 +150,37 @@ let usedImages = new Set();
 const FOREIGN_LOCATION = /\b(serbia|srbija|beograd|belgrade|novi\s*sad|vr[sš]ac|zrenjanin|pan[cč]evo|kikinda|subotica|sombor|hungary|magyarorsz|szeged|budapest)\b/i;
 const RO_OUTSIDE_TIMIS = /\b(arad|lipova|oradea|cluj|bucure[sș]ti|bucharest|bra[sș]ov|sibiu|ia[sș]i|constan[tț]a|craiova|gala[tț]i|ploie[sș]ti|pite[sș]ti|re[sș]i[tț]a|caransebe[sș]|b[aă]ile\s*herculane|or[aă][sș]ova|drobeta|deva|hunedoara|alba\s*iulia|baia\s*mare|satu\s*mare|t[aâ]rgu\s*mure[sș]|suceava|bistri[tț]a|zal[aă]u)\b/i;
 
-const isOutsideRegion = (location) =>
-    FOREIGN_LOCATION.test(location || '') || RO_OUTSIDE_TIMIS.test(location || '');
+
+const ARAD_VENUES = /teatrul\s+clasic\s*[„"]?\s*ioan\s+slavici|jelen\s+haz/i;
+
+
+const isOutsideRegion = (location, title = '') =>
+    FOREIGN_LOCATION.test(`${location || ''} ${title || ''}`) ||
+    RO_OUTSIDE_TIMIS.test(location || '') ||
+    ARAD_VENUES.test(location || '');
+
+
+const isJunkTitle = (title) => {
+    if (/[<>]/.test(title)) return true; // fragmente HTML (<img ...>)
+    if (/^\d{1,2}\s+[a-zăâîșț]+\.?\s*\d{0,4}$/i.test(title)) return true; // doar o dată
+    if (/^timi[sș]oara$/i.test(title)) return true; // doar numele orașului
+    return false;
+};
 
 const saveEvent = async (evt, source) => {
     const cleanTitle = (evt.title || '').trim();
     if (cleanTitle.length < 4) return;
+    if (isJunkTitle(cleanTitle)) {
+        console.log(`[${source}] ✗ respins (titlu corupt): "${cleanTitle.substring(0, 60)}"`);
+        return;
+    }
 
     const { year, ...dbEvt } = evt; // stripuim year (nu e în schema DB)
     if (!isFutureEvent(dbEvt.date, dbEvt.month, year)) return;
 
     // Filtru geografic: păstrăm doar evenimentele din județul Timiș — respingem
     // localitățile străine (Serbia, Ungaria) și orașele românești din alte județe.
-    if (isOutsideRegion(dbEvt.location)) {
+    if (isOutsideRegion(dbEvt.location, cleanTitle)) {
         console.log(`[${source}] ✗ respins (în afara județului Timiș): "${cleanTitle}" @ ${dbEvt.location}`);
         return;
     }
@@ -438,17 +456,17 @@ const cleanPastEvents = async () => {
     console.log(`✓ Curățate ${pastIds.length} evenimente trecute din DB.`);
 };
 
-// Șterge evenimentele din afara județului Timiș ajunse anterior în DB
-// prin agregatoarele internaționale, înainte de a fi adăugat filtrul geografic.
+// Șterge din DB evenimentele din afara județului Timiș (agregatoare internaționale)
+// și pe cele cu titluri corupte, ajunse în bază înainte de adăugarea filtrelor.
 const cleanForeignEvents = async () => {
     const all = await Event.find();
     const foreignIds = all
-        .filter(e => isOutsideRegion(e.location))
+        .filter(e => isOutsideRegion(e.location, e.title) || isJunkTitle((e.title || '').trim()))
         .map(e => e._id);
     if (foreignIds.length > 0) {
         await Event.deleteMany({ _id: { $in: foreignIds } });
     }
-    console.log(`✓ Curățate ${foreignIds.length} evenimente din afara regiunii din DB.`);
+    console.log(`✓ Curățate ${foreignIds.length} evenimente din afara regiunii / corupte din DB.`);
 };
 
 // Șterge imaginile duplicate: dacă același URL apare la N evenimente,
